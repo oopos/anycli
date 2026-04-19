@@ -19,11 +19,13 @@
 //! ```
 
 pub mod adapter;
+pub mod hub;
 pub mod output;
 pub mod pipeline;
 pub mod registry;
 
 pub use adapter::Adapter;
+pub use hub::Hub;
 pub use output::OutputFormat;
 pub use pipeline::{Pipeline, PipelineResult};
 pub use registry::Registry;

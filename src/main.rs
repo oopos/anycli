@@ -5,7 +5,7 @@ use std::process;
 use anyhow::Result;
 use clap::{Parser, Subcommand};
 
-use anycli::{OutputFormat, Pipeline, Registry};
+use anycli::{Hub, OutputFormat, Pipeline, Registry};
 
 #[derive(Parser)]
 #[command(name = "anycli", version, about = "Turn any website into structured CLI output")]
@@ -36,6 +36,18 @@ enum Commands {
         /// Adapter name.
         adapter: String,
     },
+    /// Search adapters in the community hub.
+    Search {
+        /// Search query.
+        query: String,
+    },
+    /// Install an adapter from the community hub.
+    Install {
+        /// Adapter name to install.
+        name: String,
+    },
+    /// Update all installed adapters from the hub.
+    Update,
 }
 
 #[tokio::main]
@@ -108,6 +120,37 @@ async fn run() -> Result<()> {
 
             let result = Pipeline::execute(adapter, &command, &param_refs).await?;
             println!("{}", result.format(fmt)?);
+        }
+
+        Commands::Search { query } => {
+            let hub = Hub::new()?;
+            let results = hub.search(&query).await?;
+            if results.is_empty() {
+                println!("No adapters found for `{query}`");
+            } else {
+                println!("{:<20} {}", "ADAPTER", "DESCRIPTION");
+                println!("{:<20} {}", "-------", "-----------");
+                for entry in &results {
+                    println!("{:<20} {}", entry.name, entry.description);
+                }
+                println!("\nInstall: anycli install <name>");
+            }
+        }
+
+        Commands::Install { name } => {
+            let hub = Hub::new()?;
+            let dir = anycli::hub::default_adapters_dir()
+                .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?;
+            let path = hub.install(&name, &dir).await?;
+            println!("Installed `{name}` to {}", path.display());
+        }
+
+        Commands::Update => {
+            let hub = Hub::new()?;
+            let dir = anycli::hub::default_adapters_dir()
+                .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?;
+            let (updated, total) = hub.update(&dir).await?;
+            println!("Updated {updated}/{total} adapters");
         }
     }
 
