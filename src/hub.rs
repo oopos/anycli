@@ -119,7 +119,7 @@ impl Hub {
         let content = resp.text().await?;
 
         // Validate YAML before saving.
-        serde_yaml::from_str::<crate::adapter::Adapter>(&content)
+        serde_yaml_ng::from_str::<crate::adapter::Adapter>(&content)
             .with_context(|| format!("adapter `{name}` has invalid YAML"))?;
 
         // Ensure directory exists.

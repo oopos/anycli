@@ -33,7 +33,7 @@ impl Registry {
 
         // Load built-in adapters.
         for (name, yaml) in BUILTIN_ADAPTERS {
-            match serde_yaml::from_str::<Adapter>(yaml) {
+            match serde_yaml_ng::from_str::<Adapter>(yaml) {
                 Ok(adapter) => { adapters.insert(name.to_string(), adapter); }
                 Err(e) => { debug!(name, error = %e, "failed to parse built-in adapter"); }
             }
@@ -100,7 +100,7 @@ fn load_dir(dir: &Path, adapters: &mut HashMap<String, Adapter>) -> Result<()> {
         let content = std::fs::read_to_string(&path)
             .with_context(|| format!("failed to read {}", path.display()))?;
 
-        match serde_yaml::from_str::<Adapter>(&content) {
+        match serde_yaml_ng::from_str::<Adapter>(&content) {
             Ok(adapter) => {
                 debug!(name = adapter.name, path = %path.display(), "loaded user adapter");
                 adapters.insert(adapter.name.clone(), adapter);
