@@ -1,0 +1,95 @@
+name: lobsters
+description: "Lobsters — computing-focused link aggregation"
+base_url: "https://lobste.rs"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hottest stories"
+    url: "/hottest.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      author:
+        json_path: "submitter_user"
+      comment_count:
+        json_path: "comment_count"
+      tags:
+        json_path: "tags"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 25
+        description: "Number of stories to return"
+
+  active:
+    description: "Most active discussions"
+    url: "/active.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      author:
+        json_path: "submitter_user"
+      comment_count:
+        json_path: "comment_count"
+      tags:
+        json_path: "tags"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 25
+        description: "Number of stories to return"
+
+  newest:
+    description: "Newest stories"
+    url: "/newest.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      author:
+        json_path: "submitter_user"
+      comment_count:
+        json_path: "comment_count"
+      tags:
+        json_path: "tags"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 25
+        description: "Number of stories to return"
+
+  tag:
+    description: "Stories by tag"
+    url: "/t/{tag}.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      author:
+        json_path: "submitter_user"
+      comment_count:
+        json_path: "comment_count"
+      url:
+        json_path: "url"
+    params:
+      tag:
+        type: string
+        required: true
+        description: "Tag name (e.g. rust, python, security, linux)"

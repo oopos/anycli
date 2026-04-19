@@ -1,0 +1,115 @@
+name: reddit
+description: "Reddit — frontpage of the internet"
+base_url: "https://www.reddit.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot posts from frontpage"
+    url: "/hot.json?limit={limit}"
+    format: json
+    selector: "data.children"
+    fields:
+      title:
+        json_path: "data.title"
+      subreddit:
+        json_path: "data.subreddit"
+      score:
+        json_path: "data.score"
+      author:
+        json_path: "data.author"
+      num_comments:
+        json_path: "data.num_comments"
+      url:
+        json_path: "data.url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+    headers:
+      User-Agent: "anycli/0.1"
+
+  popular:
+    description: "Popular posts across all subreddits"
+    url: "/r/popular.json?limit={limit}"
+    format: json
+    selector: "data.children"
+    fields:
+      title:
+        json_path: "data.title"
+      subreddit:
+        json_path: "data.subreddit"
+      score:
+        json_path: "data.score"
+      author:
+        json_path: "data.author"
+      num_comments:
+        json_path: "data.num_comments"
+      url:
+        json_path: "data.url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+    headers:
+      User-Agent: "anycli/0.1"
+
+  subreddit:
+    description: "Posts from a specific subreddit"
+    url: "/r/{name}/hot.json?limit={limit}"
+    format: json
+    selector: "data.children"
+    fields:
+      title:
+        json_path: "data.title"
+      score:
+        json_path: "data.score"
+      author:
+        json_path: "data.author"
+      num_comments:
+        json_path: "data.num_comments"
+      url:
+        json_path: "data.url"
+    params:
+      name:
+        type: string
+        required: true
+        description: "Subreddit name (e.g. rust, programming, linux)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+    headers:
+      User-Agent: "anycli/0.1"
+
+  search:
+    description: "Search posts across Reddit"
+    url: "/search.json?q={query}&sort=relevance&limit={limit}"
+    format: json
+    selector: "data.children"
+    fields:
+      title:
+        json_path: "data.title"
+      subreddit:
+        json_path: "data.subreddit"
+      score:
+        json_path: "data.score"
+      author:
+        json_path: "data.author"
+      num_comments:
+        json_path: "data.num_comments"
+      url:
+        json_path: "data.url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+    headers:
+      User-Agent: "anycli/0.1"

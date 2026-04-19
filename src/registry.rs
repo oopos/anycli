@@ -17,6 +17,15 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("bilibili", include_str!("../adapters/bilibili.yaml")),
     ("v2ex", include_str!("../adapters/v2ex.yaml")),
     ("douban", include_str!("../adapters/douban.yaml")),
+    ("zhihu", include_str!("../adapters/zhihu.yaml")),
+    ("weibo", include_str!("../adapters/weibo.yaml")),
+    ("reddit", include_str!("../adapters/reddit.yaml")),
+    ("stackoverflow", include_str!("../adapters/stackoverflow.yaml")),
+    ("github", include_str!("../adapters/github.yaml")),
+    ("devto", include_str!("../adapters/devto.yaml")),
+    ("lobsters", include_str!("../adapters/lobsters.yaml")),
+    ("huggingface", include_str!("../adapters/huggingface.yaml")),
+    ("steam", include_str!("../adapters/steam.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

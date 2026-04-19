@@ -1,0 +1,36 @@
+name: github
+description: "GitHub — search repositories, users, and code"
+base_url: "https://api.github.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search repositories"
+    url: "/search/repositories?q={query}&sort=stars&order=desc&per_page={limit}"
+    format: json
+    selector: "items"
+    fields:
+      name:
+        json_path: "full_name"
+      description:
+        json_path: "description"
+        default: ""
+      stars:
+        json_path: "stargazers_count"
+      language:
+        json_path: "language"
+        default: ""
+      url:
+        json_path: "html_url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query (e.g. 'rust cli', 'language:python stars:>1000')"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+    headers:
+      Accept: "application/vnd.github.v3+json"
+      User-Agent: "anycli/0.1"

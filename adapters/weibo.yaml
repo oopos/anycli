@@ -1,0 +1,31 @@
+name: weibo
+description: "微博 — 热搜榜和热门话题"
+base_url: "https://weibo.com/ajax"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot search (trending topics)"
+    url: "/side/hotSearch"
+    format: json
+    selector: "data.realtime"
+    fields:
+      word:
+        json_path: "word"
+      num:
+        json_path: "num"
+        default: "0"
+      category:
+        json_path: "category"
+        default: ""
+      label_name:
+        json_path: "label_name"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 30
+        description: "Number of hot topics to return"
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      Referer: "https://weibo.com/"

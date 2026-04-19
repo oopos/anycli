@@ -1,0 +1,28 @@
+name: huggingface
+description: "Hugging Face — AI models, datasets, and trending"
+base_url: "https://huggingface.co/api"
+version: "1.0.0"
+
+commands:
+  top:
+    description: "Trending models"
+    url: "/trending?limit={limit}&type=model"
+    format: json
+    selector: "recentlyTrending"
+    fields:
+      id:
+        json_path: "repoData.id"
+      author:
+        json_path: "repoData.author"
+      likes:
+        json_path: "repoData.likes"
+      downloads:
+        json_path: "repoData.downloads"
+      pipeline:
+        json_path: "repoData.pipeline_tag"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of models to return"

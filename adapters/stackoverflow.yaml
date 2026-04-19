@@ -1,0 +1,79 @@
+name: stackoverflow
+description: "Stack Overflow — programming Q&A"
+base_url: "https://api.stackexchange.com/2.3"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot questions"
+    url: "/questions?order=desc&sort=hot&site=stackoverflow&pagesize={limit}"
+    format: json
+    selector: "items"
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      answer_count:
+        json_path: "answer_count"
+      view_count:
+        json_path: "view_count"
+      link:
+        json_path: "link"
+      tags:
+        json_path: "tags"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of questions to return"
+
+  search:
+    description: "Search questions"
+    url: "/search/advanced?order=desc&sort=relevance&site=stackoverflow&q={query}&pagesize={limit}"
+    format: json
+    selector: "items"
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      answer_count:
+        json_path: "answer_count"
+      is_answered:
+        json_path: "is_answered"
+      link:
+        json_path: "link"
+      tags:
+        json_path: "tags"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  unanswered:
+    description: "Unanswered questions with most votes"
+    url: "/questions/unanswered?order=desc&sort=votes&site=stackoverflow&pagesize={limit}"
+    format: json
+    selector: "items"
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      view_count:
+        json_path: "view_count"
+      link:
+        json_path: "link"
+      tags:
+        json_path: "tags"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of questions to return"

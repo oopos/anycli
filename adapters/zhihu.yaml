@@ -1,0 +1,27 @@
+name: zhihu
+description: "知乎 — 中文问答社区，热门话题与推荐"
+base_url: "https://www.zhihu.com/api/v3"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Guest recommended feeds (hot questions and answers)"
+    url: "/explore/guest/feeds?limit={limit}"
+    format: json
+    selector: "data"
+    fields:
+      title:
+        json_path: "target.question.title"
+      excerpt:
+        json_path: "target.excerpt"
+      author:
+        json_path: "target.author.name"
+      voteup:
+        json_path: "target.voteup_count"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of items to return"
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"

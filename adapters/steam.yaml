@@ -1,0 +1,26 @@
+name: steam
+description: "Steam — top sellers and featured games"
+base_url: "https://store.steampowered.com/api"
+version: "1.0.0"
+
+commands:
+  top-sellers:
+    description: "Current top selling games"
+    url: "/featuredcategories"
+    format: json
+    selector: "top_sellers.items"
+    fields:
+      name:
+        json_path: "name"
+      id:
+        json_path: "id"
+      final_price:
+        json_path: "final_price"
+      discount_percent:
+        json_path: "discount_percent"
+        default: "0"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of games to return"
