@@ -10,6 +10,7 @@ use serde_json::{Value, json};
 use tracing::debug;
 
 use crate::adapter::{Adapter, Command, FieldDef, SourceFormat, Transform};
+use crate::browser::{AgentBrowserFetcher, BrowserFetcher};
 use crate::output::OutputFormat;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
@@ -36,14 +37,41 @@ impl PipelineResult {
 }
 
 /// The pipeline engine.
-pub struct Pipeline;
+pub struct Pipeline {
+    browser: Option<Box<dyn BrowserFetcher>>,
+}
 
 impl Pipeline {
-    /// Execute an adapter command with the given parameters.
+    /// Create a pipeline with no browser support.
+    /// `format: browser` adapters will use `agent-browser` CLI as fallback.
+    pub fn new() -> Self {
+        Self { browser: None }
+    }
+
+    /// Create a pipeline with a custom browser fetcher.
+    /// Used by rsclaw to inject its CDP-based implementation.
+    pub fn with_browser(fetcher: impl BrowserFetcher + 'static) -> Self {
+        Self {
+            browser: Some(Box::new(fetcher)),
+        }
+    }
+
+    /// Execute an adapter command with the given parameters (static method for backwards compat).
     ///
     /// Parameters are passed as `(key, value)` pairs. The URL template
     /// `{param}` placeholders are replaced with actual values.
     pub async fn execute(
+        adapter: &Adapter,
+        command_name: &str,
+        params: &[(&str, &str)],
+    ) -> Result<PipelineResult> {
+        let pipeline = Self::new();
+        pipeline.run(adapter, command_name, params).await
+    }
+
+    /// Execute an adapter command using this pipeline instance.
+    pub async fn run(
+        &self,
         adapter: &Adapter,
         command_name: &str,
         params: &[(&str, &str)],
@@ -75,7 +103,11 @@ impl Pipeline {
         debug!(url, adapter = adapter.name, command = command_name, "fetching");
 
         // Fetch.
-        let body = fetch(&url, &cmd.headers).await?;
+        let body = if cmd.format == SourceFormat::Browser {
+            self.browser_fetch(&url).await?
+        } else {
+            fetch(&url, &cmd.headers).await?
+        };
 
         // Extract items.
         let mut items = if let Some(ref fetch_each) = cmd.fetch_each {
@@ -92,7 +124,7 @@ impl Pipeline {
             fetch_each_item(&adapter.base_url, fetch_each, ids, &cmd.headers).await?
         } else {
             match cmd.format {
-                SourceFormat::Html => extract_html(&body, cmd)?,
+                SourceFormat::Html | SourceFormat::Browser => extract_html(&body, cmd)?,
                 SourceFormat::Json => extract_json(&body, cmd)?,
                 SourceFormat::Xml => extract_xml(&body, cmd)?,
             }
@@ -114,6 +146,17 @@ impl Pipeline {
             items,
             count,
         })
+    }
+
+    /// Fetch a URL using the browser (injected fetcher or agent-browser CLI fallback).
+    async fn browser_fetch(&self, url: &str) -> Result<String> {
+        if let Some(ref fetcher) = self.browser {
+            fetcher.fetch(url).await
+        } else {
+            // Fallback to agent-browser CLI
+            let fallback = AgentBrowserFetcher::new();
+            fallback.fetch(url).await
+        }
     }
 }
 
@@ -363,7 +406,7 @@ async fn fetch_each_item(
                 }
                 items.push(Value::Object(obj));
             }
-            SourceFormat::Html | SourceFormat::Xml => {
+            SourceFormat::Html | SourceFormat::Xml | SourceFormat::Browser => {
                 let mut obj = serde_json::Map::new();
                 for (field_name, field_def) in &fe.fields {
                     let val = extract_field_html(&body, field_def)?;

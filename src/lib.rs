@@ -19,12 +19,14 @@
 //! ```
 
 pub mod adapter;
+pub mod browser;
 pub mod hub;
 pub mod output;
 pub mod pipeline;
 pub mod registry;
 
 pub use adapter::Adapter;
+pub use browser::{AgentBrowserFetcher, BrowserFetcher};
 pub use hub::Hub;
 pub use output::OutputFormat;
 pub use pipeline::{Pipeline, PipelineResult};

@@ -73,6 +73,7 @@ pub enum SourceFormat {
     Html,
     Json,
     Xml,
+    Browser,
 }
 
 /// Defines how to extract a single field from a matched item block.
