@@ -1,0 +1,27 @@
+name: producthunt
+description: "Product Hunt — discover new tech products"
+base_url: "https://www.producthunt.com"
+version: "1.0.0"
+
+commands:
+  today:
+    description: "Today's top products (via Atom feed)"
+    url: "/feed"
+    format: xml
+    selector: "<entry>.*?</entry>"
+    fields:
+      title:
+        pattern: "<title>(.+?)</title>"
+      url:
+        pattern: '<link rel="alternate"[^>]*href="([^"]+)"'
+      author:
+        pattern: "<name>(.+?)</name>"
+        default: ""
+      published:
+        pattern: "<published>(.+?)</published>"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of products to return"

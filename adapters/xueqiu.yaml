@@ -1,0 +1,26 @@
+name: xueqiu
+description: "雪球 — 股票热帖和行情（需要浏览器渲染）"
+base_url: "https://xueqiu.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot stock topics"
+    url: "/hot/stock"
+    format: browser
+    selector: 'hot_stock_mobile_hotstock__listcard__mobile[^"]*".*?</div></div></div>'
+    fields:
+      topic:
+        pattern: 'hot_stock_mobile_tag_kmO">(#[^<]+)<'
+        default: ""
+      description:
+        pattern: 'hot_stock_mobile_desc_D_W">([^<]+)<'
+        default: ""
+      read_count:
+        pattern: 'hot_stock_mobile_read_1dy">([^<]+)<'
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of topics to return"

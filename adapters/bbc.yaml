@@ -1,0 +1,71 @@
+name: bbc
+description: "BBC News — world news via RSS"
+base_url: "https://feeds.bbci.co.uk/news"
+version: "1.0.0"
+
+commands:
+  news:
+    description: "Top news stories"
+    url: "/rss.xml"
+    format: xml
+    selector: "<item>.*?</item>"
+    fields:
+      title:
+        pattern: "<title><!\\[CDATA\\[(.+?)\\]\\]></title>"
+      description:
+        pattern: "<description><!\\[CDATA\\[(.+?)\\]\\]></description>"
+        default: ""
+      url:
+        pattern: "<link>(.+?)</link>"
+      published:
+        pattern: "<pubDate>(.+?)</pubDate>"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of articles to return"
+
+  world:
+    description: "World news"
+    url: "/world/rss.xml"
+    format: xml
+    selector: "<item>.*?</item>"
+    fields:
+      title:
+        pattern: "<title><!\\[CDATA\\[(.+?)\\]\\]></title>"
+      description:
+        pattern: "<description><!\\[CDATA\\[(.+?)\\]\\]></description>"
+        default: ""
+      url:
+        pattern: "<link>(.+?)</link>"
+      published:
+        pattern: "<pubDate>(.+?)</pubDate>"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of articles to return"
+
+  technology:
+    description: "Technology news"
+    url: "/technology/rss.xml"
+    format: xml
+    selector: "<item>.*?</item>"
+    fields:
+      title:
+        pattern: "<title><!\\[CDATA\\[(.+?)\\]\\]></title>"
+      description:
+        pattern: "<description><!\\[CDATA\\[(.+?)\\]\\]></description>"
+        default: ""
+      url:
+        pattern: "<link>(.+?)</link>"
+      published:
+        pattern: "<pubDate>(.+?)</pubDate>"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of articles to return"

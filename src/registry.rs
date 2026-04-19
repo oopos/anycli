@@ -27,6 +27,10 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("huggingface", include_str!("../adapters/huggingface.yaml")),
     ("steam", include_str!("../adapters/steam.yaml")),
     ("36kr", include_str!("../adapters/36kr.yaml")),
+    ("medium", include_str!("../adapters/medium.yaml")),
+    ("bbc", include_str!("../adapters/bbc.yaml")),
+    ("producthunt", include_str!("../adapters/producthunt.yaml")),
+    ("xueqiu", include_str!("../adapters/xueqiu.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.
