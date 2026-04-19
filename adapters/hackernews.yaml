@@ -8,9 +8,22 @@ commands:
     description: "Top stories on Hacker News"
     url: "/topstories.json"
     format: json
-    fields:
-      ids:
-        json_path: ""
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
+        descendants:
+          json_path: "descendants"
+          default: "0"
     params:
       limit:
         type: integer
@@ -21,9 +34,19 @@ commands:
     description: "Newest stories on Hacker News"
     url: "/newstories.json"
     format: json
-    fields:
-      ids:
-        json_path: ""
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
     params:
       limit:
         type: integer
@@ -43,8 +66,8 @@ commands:
         json_path: "score"
       by:
         json_path: "by"
-      time:
-        json_path: "time"
+      type:
+        json_path: "type"
       descendants:
         json_path: "descendants"
         default: "0"

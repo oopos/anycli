@@ -1,7 +1,7 @@
 name: github-trending
 description: "GitHub Trending — trending repositories and developers"
 base_url: "https://github.com"
-version: "1.0.0"
+version: "1.0.1"
 
 commands:
   repos:
@@ -11,18 +11,18 @@ commands:
     selector: '<article class="Box-row"[^>]*>.*?</article>'
     fields:
       repo:
-        pattern: '<h2[^>]*>.*?<a href="/([^"]+)"'
+        pattern: '<h2[^>]*>.*?<a href="/([^/]+/[^/]+?)(?:/stargazers)?"'
       description:
         pattern: '<p class="col-9[^"]*"[^>]*>\s*(.*?)\s*</p>'
         transform: strip_html
       language:
         pattern: '<span itemprop="programmingLanguage">\s*(.*?)\s*</span>'
       stars:
-        pattern: 'stargazers"[^>]*>\s*([0-9,]+)\s*</a>'
+        pattern: 'stargazers.*?</svg>\s*([0-9,]+)'
       forks:
-        pattern: 'forks"[^>]*>\s*([0-9,]+)\s*</a>'
+        pattern: 'forks.*?</svg>\s*([0-9,]+)'
       today:
-        pattern: '(\d+[,\d]*\s+stars?\s+today)'
+        pattern: '(\d[\d,]*\s+stars?\s+today)'
     params:
       language:
         type: string

@@ -78,16 +78,32 @@ impl Pipeline {
         let body = fetch(&url, &cmd.headers).await?;
 
         // Extract items.
-        let mut items = match cmd.format {
-            SourceFormat::Html => extract_html(&body, cmd)?,
-            SourceFormat::Json => extract_json(&body, cmd)?,
-            SourceFormat::Xml => extract_xml(&body, cmd)?,
+        let mut items = if let Some(ref fetch_each) = cmd.fetch_each {
+            // fetch_each mode: initial response is ID list, fetch each detail.
+            let ids = extract_id_list(&body, cmd)?;
+
+            // Apply limit before fetching details.
+            let limit = param_map
+                .get("limit")
+                .and_then(|s| s.parse::<usize>().ok())
+                .unwrap_or(ids.len());
+            let ids = &ids[..limit.min(ids.len())];
+
+            fetch_each_item(&adapter.base_url, fetch_each, ids, &cmd.headers).await?
+        } else {
+            match cmd.format {
+                SourceFormat::Html => extract_html(&body, cmd)?,
+                SourceFormat::Json => extract_json(&body, cmd)?,
+                SourceFormat::Xml => extract_xml(&body, cmd)?,
+            }
         };
 
-        // Apply limit.
-        if let Some(limit_str) = param_map.get("limit") {
-            if let Ok(limit) = limit_str.parse::<usize>() {
-                items.truncate(limit);
+        // Apply limit (for non-fetch_each mode).
+        if cmd.fetch_each.is_none() {
+            if let Some(limit_str) = param_map.get("limit") {
+                if let Ok(limit) = limit_str.parse::<usize>() {
+                    items.truncate(limit);
+                }
             }
         }
 
@@ -198,7 +214,7 @@ fn extract_html(html: &str, cmd: &Command) -> Result<Vec<Value>> {
 /// Extract a single field from an HTML block.
 fn extract_field_html(block: &str, def: &FieldDef) -> Result<Value> {
     let raw = if let Some(ref pattern) = def.pattern {
-        let re = Regex::new(pattern)
+        let re = Regex::new(&format!("(?s){pattern}"))
             .with_context(|| format!("invalid field pattern: {pattern}"))?;
         re.captures(block)
             .and_then(|c| c.get(1))
@@ -285,6 +301,80 @@ fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
         }
     }
     Some(current)
+}
+
+/// Extract a flat list of IDs from the initial response (for fetch_each mode).
+fn extract_id_list(body: &str, cmd: &Command) -> Result<Vec<String>> {
+    let root: Value = serde_json::from_str(body).context("invalid JSON response")?;
+
+    let array = if let Some(ref selector) = cmd.selector {
+        navigate_json(&root, selector)
+            .and_then(|v| v.as_array().cloned())
+            .unwrap_or_default()
+    } else if let Some(arr) = root.as_array() {
+        arr.clone()
+    } else {
+        vec![root]
+    };
+
+    Ok(array
+        .iter()
+        .map(|v| match v {
+            Value::Number(n) => n.to_string(),
+            Value::String(s) => s.clone(),
+            other => other.to_string(),
+        })
+        .collect())
+}
+
+/// Fetch each item by ID and extract fields from the detail response.
+async fn fetch_each_item(
+    base_url: &str,
+    fe: &crate::adapter::FetchEach,
+    ids: &[String],
+    headers: &HashMap<String, String>,
+) -> Result<Vec<Value>> {
+    let mut items = Vec::with_capacity(ids.len());
+    let base = base_url.trim_end_matches('/');
+
+    for id in ids {
+        let path = fe.url.replace("{id}", id);
+        let url = if path.starts_with("http://") || path.starts_with("https://") {
+            path
+        } else {
+            format!("{base}{path}")
+        };
+
+        let body = match fetch(&url, headers).await {
+            Ok(b) => b,
+            Err(_) => continue,
+        };
+
+        match fe.format {
+            SourceFormat::Json => {
+                let root: Value = match serde_json::from_str(&body) {
+                    Ok(v) => v,
+                    Err(_) => continue,
+                };
+                let mut obj = serde_json::Map::new();
+                for (field_name, field_def) in &fe.fields {
+                    let val = extract_field_json(&root, field_def)?;
+                    obj.insert(field_name.clone(), val);
+                }
+                items.push(Value::Object(obj));
+            }
+            SourceFormat::Html | SourceFormat::Xml => {
+                let mut obj = serde_json::Map::new();
+                for (field_name, field_def) in &fe.fields {
+                    let val = extract_field_html(&body, field_def)?;
+                    obj.insert(field_name.clone(), val);
+                }
+                items.push(Value::Object(obj));
+            }
+        }
+    }
+
+    Ok(items)
 }
 
 /// Extract items from an XML response (simple regex-based).

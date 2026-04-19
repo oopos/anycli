@@ -45,6 +45,24 @@ pub struct Command {
     /// Extra HTTP headers to send with the request.
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    /// Fetch each item individually by ID.
+    /// The first response returns an array of IDs; each ID is fetched
+    /// via `fetch_each.url` (with `{id}` placeholder) to build the final items.
+    #[serde(default)]
+    pub fetch_each: Option<FetchEach>,
+}
+
+/// Fetch-each definition: the initial response is an ID list, and each
+/// item is fetched individually from a detail URL.
+#[derive(Debug, Clone, Deserialize)]
+pub struct FetchEach {
+    /// URL template with `{id}` placeholder (e.g., "/item/{id}.json").
+    pub url: String,
+    /// Source format of the detail response.
+    #[serde(default)]
+    pub format: SourceFormat,
+    /// Fields to extract from each detail response.
+    pub fields: IndexMap<String, FieldDef>,
 }
 
 /// Source format of the HTTP response.
