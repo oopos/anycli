@@ -20,10 +20,10 @@ enum Commands {
     Run {
         /// Adapter name (e.g., "hackernews", "bilibili").
         adapter: String,
-        /// Command name (e.g., "top", "search").
+        /// Command name (e.g., "top", "search", "help", "--help").
         command: String,
         /// Parameters as key=value pairs (e.g., limit=10 query="rust").
-        #[arg(trailing_var_arg = true)]
+        #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         params: Vec<String>,
         /// Output format: json, table, csv, markdown.
         #[arg(long, short, default_value = "json")]
@@ -59,6 +59,28 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
+    // Intercept `anycli run <adapter> --help` before clap parses it.
+    // Transform: `run <adapter> --help` → `run <adapter> help`
+    //            `run <adapter> <cmd> --help` → `run <adapter> <cmd> help`
+    let args: Vec<String> = std::env::args().collect();
+    if args.len() >= 3 && args[1] == "run" {
+        let has_help = args[2..].iter().any(|a| a == "--help" || a == "-h");
+        if has_help {
+            let registry = Registry::load()?;
+            let adapter_name = &args[2];
+            if let Ok(adapter) = registry.find(adapter_name) {
+                // Find the command (if any) before --help
+                let cmd_name = args[3..].iter().find(|a| *a != "--help" && *a != "-h");
+                if let Some(cmd) = cmd_name {
+                    print_command_help(adapter, cmd)?;
+                } else {
+                    print_adapter_help(adapter, None);
+                }
+                return Ok(());
+            }
+        }
+    }
+
     let cli = Cli::parse();
     let registry = Registry::load()?;
 
@@ -102,6 +124,19 @@ async fn run() -> Result<()> {
             format,
         } => {
             let adapter = registry.find(&name)?;
+
+            // Show adapter help: `anycli run <adapter> help` or `anycli run <adapter> --help`
+            if command == "help" || command == "--help" || command == "-h" {
+                print_adapter_help(adapter, params.first().map(|s| s.as_str()));
+                return Ok(());
+            }
+
+            // Show command help: `anycli run <adapter> <cmd> --help`
+            if params.iter().any(|p| p == "--help" || p == "-h" || p == "help") {
+                print_command_help(adapter, &command)?;
+                return Ok(());
+            }
+
             let fmt: OutputFormat = format.parse()?;
 
             // Parse key=value params.
@@ -153,6 +188,106 @@ async fn run() -> Result<()> {
             println!("Updated {updated}/{total} adapters");
         }
     }
+
+    Ok(())
+}
+
+fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
+    // If a specific command is requested: `anycli run <adapter> help <command>`
+    if let Some(cmd_name) = sub_command {
+        if let Err(e) = print_command_help(adapter, cmd_name) {
+            eprintln!("error: {e:#}");
+        }
+        return;
+    }
+
+    println!("Usage: anycli run {} [options] <command> [params...]\n", adapter.name);
+    println!("{}\n", adapter.description);
+    println!("Commands:");
+
+    let mut cmds: Vec<_> = adapter.commands.iter().collect();
+    cmds.sort_by_key(|(name, _)| (*name).clone());
+
+    for (cmd_name, cmd) in &cmds {
+        let params_hint: String = cmd
+            .params
+            .iter()
+            .filter(|(_, p)| p.required)
+            .map(|(name, _)| format!("<{name}>"))
+            .collect::<Vec<_>>()
+            .join(" ");
+
+        let opts = if cmd.params.iter().any(|(_, p)| !p.required) {
+            "[options] "
+        } else {
+            ""
+        };
+
+        println!(
+            "  {:<28} {}",
+            format!("{} {}{}", cmd_name, opts, params_hint).trim(),
+            cmd.description
+        );
+    }
+
+    println!("\nOptions:");
+    println!("  -f, --format <fmt>         Output format: json, table, csv, markdown [default: json]");
+    println!("  -h, --help                 Display help for command");
+    println!(
+        "\nRun 'anycli run {} help <command>' for more info on a specific command.",
+        adapter.name
+    );
+}
+
+fn print_command_help(adapter: &anycli::Adapter, cmd_name: &str) -> Result<()> {
+    let cmd = adapter
+        .commands
+        .get(cmd_name)
+        .ok_or_else(|| {
+            let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
+            anyhow::anyhow!(
+                "command `{}` not found in adapter `{}`. available: {}",
+                cmd_name,
+                adapter.name,
+                available.join(", ")
+            )
+        })?;
+
+    println!(
+        "Usage: anycli run {} {} [params...]\n",
+        adapter.name, cmd_name
+    );
+    println!("{}\n", cmd.description);
+
+    if cmd.params.is_empty() {
+        println!("No parameters.");
+    } else {
+        println!("Parameters:");
+        let mut params: Vec<_> = cmd.params.iter().collect();
+        params.sort_by_key(|(_, p)| !p.required);
+
+        for (param_name, param) in &params {
+            let req = if param.required { " (required)" } else { "" };
+            let desc = param.description.as_deref().unwrap_or("");
+            let default = param
+                .default
+                .as_ref()
+                .map(|d| format!(" [default: {d}]"))
+                .unwrap_or_default();
+            let type_hint = &param.param_type;
+            println!("  {:<14} <{type_hint}>  {desc}{default}{req}", param_name);
+        }
+    }
+
+    println!("\nExample:");
+    let example_params: String = cmd
+        .params
+        .iter()
+        .filter(|(_, p)| p.required)
+        .map(|(name, _)| format!("{name}=VALUE"))
+        .collect::<Vec<_>>()
+        .join(" ");
+    println!("  anycli run {} {} {}", adapter.name, cmd_name, example_params);
 
     Ok(())
 }
