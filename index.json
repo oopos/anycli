@@ -1,0 +1,11 @@
+{
+  "adapters": [
+    {"name": "arxiv", "description": "arXiv — search and browse academic papers", "version": "1.0.0", "tags": ["academic", "papers"]},
+    {"name": "bilibili", "description": "Bilibili — hot videos, search, and rankings", "version": "1.0.0", "tags": ["video", "chinese"]},
+    {"name": "douban", "description": "Douban — movies, books, and music", "version": "1.0.0", "tags": ["movies", "books", "chinese"]},
+    {"name": "github-trending", "description": "GitHub Trending — trending repositories", "version": "1.0.1", "tags": ["github", "code"]},
+    {"name": "hackernews", "description": "Hacker News — top stories and items", "version": "1.0.0", "tags": ["news", "tech"]},
+    {"name": "v2ex", "description": "V2EX — tech community hot topics", "version": "1.0.0", "tags": ["forum", "tech", "chinese"]},
+    {"name": "wikipedia", "description": "Wikipedia — article summaries and search", "version": "1.0.0", "tags": ["encyclopedia"]}
+  ]
+}

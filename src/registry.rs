@@ -15,6 +15,8 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("arxiv", include_str!("../adapters/arxiv.yaml")),
     ("wikipedia", include_str!("../adapters/wikipedia.yaml")),
     ("bilibili", include_str!("../adapters/bilibili.yaml")),
+    ("v2ex", include_str!("../adapters/v2ex.yaml")),
+    ("douban", include_str!("../adapters/douban.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

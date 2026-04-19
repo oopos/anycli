@@ -1,0 +1,87 @@
+name: douban
+description: "豆瓣 — 电影、图书、音乐评分与推荐"
+base_url: "https://movie.douban.com/j"
+version: "1.0.0"
+
+commands:
+  movie-hot:
+    description: "Hot movies"
+    url: "/search_subjects?type=movie&tag=热门&page_limit={limit}&page_start=0"
+    format: json
+    selector: "subjects"
+    fields:
+      title:
+        json_path: "title"
+      rate:
+        json_path: "rate"
+      url:
+        json_path: "url"
+      cover:
+        json_path: "cover"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of movies to return"
+    headers:
+      Referer: "https://movie.douban.com/"
+
+  movie-top:
+    description: "Top rated movies"
+    url: "/search_subjects?type=movie&tag=豆瓣高分&page_limit={limit}&page_start=0"
+    format: json
+    selector: "subjects"
+    fields:
+      title:
+        json_path: "title"
+      rate:
+        json_path: "rate"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of movies to return"
+    headers:
+      Referer: "https://movie.douban.com/"
+
+  tv-hot:
+    description: "Hot TV shows"
+    url: "/search_subjects?type=tv&tag=热门&page_limit={limit}&page_start=0"
+    format: json
+    selector: "subjects"
+    fields:
+      title:
+        json_path: "title"
+      rate:
+        json_path: "rate"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of TV shows to return"
+    headers:
+      Referer: "https://movie.douban.com/"
+
+  book-hot:
+    description: "Hot books"
+    url: "/search_subjects?type=book&tag=热门&page_limit={limit}&page_start=0"
+    format: json
+    selector: "subjects"
+    fields:
+      title:
+        json_path: "title"
+      rate:
+        json_path: "rate"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of books to return"
+    headers:
+      Referer: "https://book.douban.com/"

@@ -13,7 +13,7 @@ use anyhow::{Context, Result, bail};
 use serde::{Deserialize, Serialize};
 use tracing::debug;
 
-const HUB_REPO: &str = "oopos/anycli-hub";
+const HUB_REPO: &str = "oopos/anycli";
 const HUB_BRANCH: &str = "main";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
 const USER_AGENT: &str = "anycli/0.1";

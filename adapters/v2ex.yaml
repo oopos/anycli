@@ -1,0 +1,66 @@
+name: v2ex
+description: "V2EX — 创意工作者社区，热门话题和最新讨论"
+base_url: "https://www.v2ex.com/api"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot topics"
+    url: "/topics/hot.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      node:
+        json_path: "node.title"
+      author:
+        json_path: "member.username"
+      replies:
+        json_path: "replies"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of topics to return"
+
+  latest:
+    description: "Latest topics"
+    url: "/topics/latest.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      node:
+        json_path: "node.title"
+      author:
+        json_path: "member.username"
+      replies:
+        json_path: "replies"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of topics to return"
+
+  node:
+    description: "Get topics in a specific node"
+    url: "/topics/show.json?node_name={name}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "member.username"
+      replies:
+        json_path: "replies"
+      url:
+        json_path: "url"
+    params:
+      name:
+        type: string
+        required: true
+        description: "Node name (e.g. python, golang, apple, jobs)"
