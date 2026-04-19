@@ -1,0 +1,84 @@
+name: bilibili
+description: "Bilibili — hot videos, search, and rankings"
+base_url: "https://api.bilibili.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Popular/trending videos"
+    url: "/x/web-interface/popular?ps={limit}&pn=1"
+    format: json
+    selector: "data.list"
+    fields:
+      title:
+        json_path: "title"
+      bvid:
+        json_path: "bvid"
+      author:
+        json_path: "owner.name"
+      view:
+        json_path: "stat.view"
+      danmaku:
+        json_path: "stat.danmaku"
+      reply:
+        json_path: "stat.reply"
+      desc:
+        json_path: "desc"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of videos per page"
+
+  search:
+    description: "Search videos"
+    url: "/x/web-interface/wbi/search/all/v2?keyword={query}&page=1&page_size={limit}"
+    format: json
+    selector: "data.result"
+    fields:
+      title:
+        json_path: "title"
+        transform: strip_html
+      bvid:
+        json_path: "bvid"
+      author:
+        json_path: "author"
+      play:
+        json_path: "play"
+      description:
+        json_path: "description"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Results per page"
+    headers:
+      Referer: "https://www.bilibili.com"
+
+  ranking:
+    description: "Ranking by category"
+    url: "/x/web-interface/ranking/v2?rid={rid}&type=all"
+    format: json
+    selector: "data.list"
+    fields:
+      title:
+        json_path: "title"
+      bvid:
+        json_path: "bvid"
+      author:
+        json_path: "owner.name"
+      score:
+        json_path: "score"
+      view:
+        json_path: "stat.view"
+    params:
+      rid:
+        type: integer
+        default: 0
+        description: "Category ID (0=all, 1=anime, 3=music, 4=game, 5=dance, 36=tech, 188=digital)"

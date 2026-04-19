@@ -1,0 +1,51 @@
+name: wikipedia
+description: "Wikipedia — article summaries and search"
+base_url: "https://en.wikipedia.org/api/rest_v1"
+version: "1.0.0"
+
+commands:
+  summary:
+    description: "Get a summary of a Wikipedia article"
+    url: "/page/summary/{title}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      description:
+        json_path: "description"
+      extract:
+        json_path: "extract"
+      thumbnail:
+        json_path: "thumbnail.source"
+      url:
+        json_path: "content_urls.desktop.page"
+    params:
+      title:
+        type: string
+        required: true
+        description: "Article title (use underscores for spaces)"
+
+  search:
+    description: "Search Wikipedia articles"
+    url: "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&format=json&srlimit={limit}"
+    format: json
+    selector: "query.search"
+    fields:
+      title:
+        json_path: "title"
+      snippet:
+        json_path: "snippet"
+        transform: strip_html
+      size:
+        json_path: "size"
+      wordcount:
+        json_path: "wordcount"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

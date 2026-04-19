@@ -1,0 +1,63 @@
+name: arxiv
+description: "arXiv — search and browse academic papers"
+base_url: "https://export.arxiv.org/api"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search arXiv papers"
+    url: "/query?search_query={query}&start=0&max_results={limit}"
+    format: xml
+    selector: '<entry>.*?</entry>'
+    fields:
+      title:
+        pattern: '<title[^>]*>(.*?)</title>'
+        transform: trim
+      summary:
+        pattern: '<summary[^>]*>(.*?)</summary>'
+        transform: trim
+      authors:
+        pattern: '<author>.*?<name>(.*?)</name>'
+      published:
+        pattern: '<published>(.*?)</published>'
+      link:
+        pattern: '<id>(.*?)</id>'
+      category:
+        pattern: '<arxiv:primary_category[^>]*term="([^"]*)"'
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query (supports arXiv query syntax: ti:, au:, abs:, all:)"
+      limit:
+        type: integer
+        default: 10
+        description: "Maximum number of results"
+
+  recent:
+    description: "Recent papers in a category"
+    url: "/query?search_query=cat:{category}&sortBy=submittedDate&sortOrder=descending&max_results={limit}"
+    format: xml
+    selector: '<entry>.*?</entry>'
+    fields:
+      title:
+        pattern: '<title[^>]*>(.*?)</title>'
+        transform: trim
+      authors:
+        pattern: '<author>.*?<name>(.*?)</name>'
+      published:
+        pattern: '<published>(.*?)</published>'
+      link:
+        pattern: '<id>(.*?)</id>'
+      summary:
+        pattern: '<summary[^>]*>(.*?)</summary>'
+        transform: trim
+    params:
+      category:
+        type: string
+        default: "cs.AI"
+        description: "arXiv category (e.g., cs.AI, cs.CL, cs.LG, math.CO)"
+      limit:
+        type: integer
+        default: 10
+        description: "Maximum number of results"

@@ -1,0 +1,34 @@
+name: github-trending
+description: "GitHub Trending — trending repositories and developers"
+base_url: "https://github.com"
+version: "1.0.0"
+
+commands:
+  repos:
+    description: "Trending repositories"
+    url: "/trending/{language}?since={since}"
+    format: html
+    selector: '<article class="Box-row"[^>]*>.*?</article>'
+    fields:
+      repo:
+        pattern: '<h2[^>]*>.*?<a href="/([^"]+)"'
+      description:
+        pattern: '<p class="col-9[^"]*"[^>]*>\s*(.*?)\s*</p>'
+        transform: strip_html
+      language:
+        pattern: '<span itemprop="programmingLanguage">\s*(.*?)\s*</span>'
+      stars:
+        pattern: 'stargazers"[^>]*>\s*([0-9,]+)\s*</a>'
+      forks:
+        pattern: 'forks"[^>]*>\s*([0-9,]+)\s*</a>'
+      today:
+        pattern: '(\d+[,\d]*\s+stars?\s+today)'
+    params:
+      language:
+        type: string
+        default: ""
+        description: "Programming language filter (e.g., rust, python)"
+      since:
+        type: string
+        default: "daily"
+        description: "Time range: daily, weekly, monthly"

@@ -1,0 +1,55 @@
+name: hackernews
+description: "Hacker News — top stories, new stories, and individual items"
+base_url: "https://hacker-news.firebaseio.com/v0"
+version: "1.0.0"
+
+commands:
+  top:
+    description: "Top stories on Hacker News"
+    url: "/topstories.json"
+    format: json
+    fields:
+      ids:
+        json_path: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of stories to return"
+
+  new:
+    description: "Newest stories on Hacker News"
+    url: "/newstories.json"
+    format: json
+    fields:
+      ids:
+        json_path: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of stories to return"
+
+  item:
+    description: "Get a specific story by ID"
+    url: "/item/{id}.json"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+      score:
+        json_path: "score"
+      by:
+        json_path: "by"
+      time:
+        json_path: "time"
+      descendants:
+        json_path: "descendants"
+        default: "0"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Story ID"

@@ -1,0 +1,30 @@
+[package]
+name = "anycli"
+version = "0.1.0"
+edition = "2024"
+description = "Turn any website into structured CLI output. Declarative YAML adapters for web data extraction."
+license = "MIT"
+repository = "https://github.com/oopos/anycli"
+keywords = ["cli", "web", "scraping", "adapter", "agent"]
+categories = ["command-line-utilities", "web-programming"]
+
+[lib]
+name = "anycli"
+path = "src/lib.rs"
+
+[[bin]]
+name = "anycli"
+path = "src/main.rs"
+
+[dependencies]
+anyhow = "1"
+dirs-next = "2"
+clap = { version = "4", features = ["derive"] }
+indexmap = { version = "2", features = ["serde"] }
+regex = "1"
+reqwest = { version = "0.12", features = ["rustls-tls", "json"], default-features = false }
+serde = { version = "1", features = ["derive"] }
+serde_json = "1"
+serde_yaml = "0.9"
+tokio = { version = "1", features = ["full"] }
+tracing = "0.1"
