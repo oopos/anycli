@@ -79,13 +79,12 @@ fn format_table(result: &PipelineResult) -> Result<String> {
     }
     out.push_str("┐\n");
 
-    // Header: │ col │ col │
+    // Header: │ col │ col │ (bold cyan)
     out.push_str("│");
     for (i, key) in keys.iter().enumerate() {
         if i > 0 { out.push_str("│"); }
-        out.push(' ');
-        out.push_str(&pad_display(key, widths[i]));
-        out.push(' ');
+        let padded = pad_display(key, widths[i]);
+        out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
     }
     out.push_str("│\n");
 
