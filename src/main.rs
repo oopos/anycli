@@ -120,14 +120,7 @@ async fn run() -> Result<()> {
                 let adapter = registry.find(adapter_name)?;
                 let fmt: OutputFormat = fmt.parse()?;
 
-                let parsed: Vec<(String, String)> = params
-                    .iter()
-                    .filter(|p| !p.starts_with('-'))
-                    .filter_map(|p| {
-                        let (k, v) = p.split_once('=')?;
-                        Some((k.to_owned(), v.to_owned()))
-                    })
-                    .collect();
+                let parsed = parse_params(&params.to_vec());
 
                 let param_refs: Vec<(&str, &str)> = parsed
                     .iter()
@@ -199,14 +192,8 @@ async fn run() -> Result<()> {
 
             let fmt: OutputFormat = format.parse()?;
 
-            // Parse key=value params.
-            let parsed: Vec<(String, String)> = params
-                .iter()
-                .filter_map(|p| {
-                    let (k, v) = p.split_once('=')?;
-                    Some((k.to_owned(), v.to_owned()))
-                })
-                .collect();
+            // Parse params: supports key=value, --key value, --key=value
+            let parsed = parse_params(&params);
 
             let param_refs: Vec<(&str, &str)> = parsed
                 .iter()
@@ -250,6 +237,39 @@ async fn run() -> Result<()> {
     }
 
     Ok(())
+}
+
+/// Parse params from multiple formats:
+/// - key=value
+/// - --key value
+/// - --key=value
+fn parse_params(params: &[String]) -> Vec<(String, String)> {
+    let mut parsed = Vec::new();
+    let mut i = 0;
+    while i < params.len() {
+        let p = &params[i];
+        if let Some(rest) = p.strip_prefix("--") {
+            // --key=value
+            if let Some((k, v)) = rest.split_once('=') {
+                parsed.push((k.to_owned(), v.to_owned()));
+            } else {
+                // --key value
+                let key = rest.to_owned();
+                if i + 1 < params.len() && !params[i + 1].starts_with("--") {
+                    i += 1;
+                    parsed.push((key, params[i].clone()));
+                } else {
+                    parsed.push((key, "true".to_owned()));
+                }
+            }
+        } else if let Some((k, v)) = p.split_once('=') {
+            // key=value
+            parsed.push((k.to_owned(), v.to_owned()));
+        }
+        // skip unrecognized positional args
+        i += 1;
+    }
+    parsed
 }
 
 fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
