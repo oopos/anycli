@@ -1,0 +1,146 @@
+name: discord-app
+description: "Discord — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check Discord Desktop connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read recent messages from the active Discord channel"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const limit = parseInt('${{count}}') || 20;
+        const results = [];
+        const msgNodes = document.querySelectorAll('[id^="chat-messages-"] > div, [class*="messageListItem"]');
+        const slice = Array.from(msgNodes).slice(-limit);
+        slice.forEach(node => {
+          const authorEl = node.querySelector('[class*="username"], [class*="headerText"] span');
+          const timeEl = node.querySelector('time');
+          const contentEl = node.querySelector('[id^="message-content-"], [class*="messageContent"]');
+          if (contentEl) {
+            results.push({
+              author: authorEl ? authorEl.textContent.trim() : '—',
+              time: timeEl ? timeEl.getAttribute('datetime') || timeEl.textContent.trim() : '',
+              message: (contentEl.textContent || '').trim().substring(0, 300)
+            });
+          }
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      author:
+        json_path: "[].author"
+      time:
+        json_path: "[].time"
+      message:
+        json_path: "[].message"
+    params:
+      count:
+        type: string
+        required: false
+        description: "Number of messages to read (default: 20)"
+
+  send:
+    description: "Send a message in the active Discord channel"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        const editor = document.querySelector('[role="textbox"][data-slate-editor="true"], [class*="slateTextArea"]');
+        if (!editor) return JSON.stringify({status: 'error', error: 'Could not find Discord message input'});
+        editor.focus();
+        document.execCommand('insertText', false, text);
+        return JSON.stringify({status: 'injected'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  channels:
+    description: "List channels in the current Discord server"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const results = [];
+        const links = document.querySelectorAll('a[href*="/channels/"][data-list-item-id^="channels___"]');
+        links.forEach(function(el) {
+          var label = el.getAttribute('aria-label') || '';
+          if (!label) return;
+          if (/[（(]category[）)]/i.test(label)) return;
+          var commaIdx = label.search(/[,，]/);
+          var cleaned = commaIdx !== -1 ? label.slice(commaIdx + 1).trimStart() : label;
+          var m = cleaned.match(/^(.+?)\s*[（(](.+?)[）)]\s*$/);
+          if (!m) return;
+          var name = m[1].trim();
+          var rawType = m[2].toLowerCase();
+          if (!name || !/^[\x20-\x7E]+$/.test(name)) return;
+          var type = 'Text';
+          if (rawType.includes('voice')) type = 'Voice';
+          else if (rawType.includes('forum')) type = 'Forum';
+          else if (rawType.includes('announcement')) type = 'Announcement';
+          else if (rawType.includes('stage')) type = 'Stage';
+          results.push({ index: results.length + 1, channel: name, type: type });
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "[].index"
+      channel:
+        json_path: "[].channel"
+      type:
+        json_path: "[].type"
+    params: {}
+
+  servers:
+    description: "List all Discord servers (guilds) in the sidebar"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const results = [];
+        const items = document.querySelectorAll('[data-list-item-id*="guildsnav___"], [class*="listItem_"]');
+        items.forEach((item, i) => {
+          const nameAttr = item.querySelector('[data-dnd-name]');
+          const ariaLabel = item.getAttribute('aria-label') || (item.querySelector('[aria-label]') || {}).getAttribute?.('aria-label');
+          const name = nameAttr ? nameAttr.getAttribute('data-dnd-name') : (ariaLabel || (item.textContent || '').trim());
+          if (name && name.length > 0) {
+            results.push({ index: i + 1, server: name.substring(0, 80) });
+          }
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "[].index"
+      server:
+        json_path: "[].server"
+    params: {}

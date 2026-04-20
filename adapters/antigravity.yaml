@@ -1,0 +1,64 @@
+name: antigravity
+description: "Antigravity AI — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check Antigravity CDP connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read the latest chat messages from Antigravity AI"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const container = document.getElementById('conversation');
+        if (!container) return JSON.stringify({role: 'error', content: 'Could not find conversation container'});
+        return JSON.stringify({role: 'history', content: container.innerText.trim()});
+      })()
+    fields:
+      role:
+        json_path: "role"
+      content:
+        json_path: "content"
+    params: {}
+
+  send:
+    description: "Send a message to Antigravity AI via Lexical editor"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        const container = document.getElementById('antigravity.agentSidePanelInputBox');
+        if (!container) return JSON.stringify({status: 'error', error: 'Could not find agentSidePanelInputBox'});
+        const editor = container.querySelector('[data-lexical-editor="true"]');
+        if (!editor) return JSON.stringify({status: 'error', error: 'Could not find Lexical editor'});
+        editor.focus();
+        document.execCommand('insertText', false, text);
+        return JSON.stringify({status: 'injected', message: text});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"

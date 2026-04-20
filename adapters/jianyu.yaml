@@ -1,0 +1,101 @@
+name: jianyu
+description: "剑鱼标讯 — 招标采购公告搜索（需登录）"
+base_url: "https://www.jianyu360.cn"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索剑鱼标讯公告"
+    url: "https://www.jianyu360.cn/jylab/supsearch/index.html?keywords={query}&selectType=title&searchGroup=1"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = '{query}';
+        const limit = 20;
+        const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+
+        // Try API search first
+        const now = Math.floor(Date.now() / 1000);
+        const body = {
+          searchGroup: 1, reqType: 'lastNews', pageNum: 1,
+          pageSize: Math.min(limit, 50),
+          keyWords: query, searchMode: 0, bidField: '',
+          publishTime: (now - 3600 * 24 * 365 * 3) + '-' + now,
+          selectType: 'title,content', subtype: '',
+          exclusionWords: '', buyer: '', winner: '', agency: '',
+          industry: '', province: '', city: '', district: '',
+          buyerClass: '', fileExists: '', price: '',
+          buyerTel: '', winnerTel: '',
+        };
+
+        const results = [];
+        const seen = new Set();
+        const types = ['fType', 'eType', 'vType', 'mType'];
+
+        for (const type of types) {
+          try {
+            const response = await fetch('/jyapi/jybx/core/' + type + '/searchList', {
+              method: 'POST',
+              headers: { 'Accept': 'application/json', 'Content-Type': 'application/json' },
+              credentials: 'include',
+              body: JSON.stringify(body),
+            });
+            const raw = await response.json();
+            const list = raw?.data?.list || [];
+            for (const item of list) {
+              const title = norm(item.title || item.noticeTitle || item.bidTitle || item.projectName || '');
+              let url = norm(item.url || item.detailUrl || item.link || '');
+              if (url && !url.startsWith('http')) {
+                if (url.startsWith('//')) url = 'https:' + url;
+                else if (url.startsWith('/')) url = 'https://www.jianyu360.cn' + url;
+              }
+              if (!title || !url) continue;
+              const key = title + '\t' + url;
+              if (seen.has(key)) continue;
+              seen.add(key);
+              const date = norm(item.publishTime || item.publishDate || item.pubDate || item.createTime || item.time || '');
+              results.push({
+                rank: results.length + 1,
+                title, url, publish_time: date,
+              });
+              if (results.length >= limit) break;
+            }
+          } catch {}
+          if (results.length >= limit) break;
+        }
+
+        // Fall back to DOM extraction if API returned nothing
+        if (results.length === 0) {
+          await new Promise(r => setTimeout(r, 3000));
+          const links = document.querySelectorAll('a[href*="jianyu360.cn"]');
+          for (const a of links) {
+            const title = norm(a.textContent);
+            const url = a.href || '';
+            if (!title || title.length < 8 || !url) continue;
+            if (seen.has(title + '\t' + url)) continue;
+            seen.add(title + '\t' + url);
+            results.push({ rank: results.length + 1, title, url, publish_time: '' });
+            if (results.length >= limit) break;
+          }
+        }
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      publish_time:
+        json_path: "publish_time"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "返回结果数量 (max 50)"

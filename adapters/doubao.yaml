@@ -1,0 +1,301 @@
+name: doubao
+description: "Doubao - ByteDance AI chat assistant"
+base_url: "https://www.doubao.com"
+version: "1.0.0"
+
+commands:
+  ask:
+    description: "Send a prompt and get response"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const text = '${{text}}';
+        const timeout = parseInt('${{timeout}}') || 60;
+
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const composerSelectors = [
+          'textarea[data-testid="chat_input_input"]',
+          '[data-testid="chat_input"] textarea',
+          '.chat-input textarea',
+          'textarea[placeholder*="发消息"]',
+          'textarea',
+          '[contenteditable="true"]'
+        ];
+
+        const findComposer = () => {
+          for (const selector of composerSelectors) {
+            const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
+            if (node) return node;
+          }
+          return null;
+        };
+
+        // Get baseline turns before sending
+        const getVisibleTurns = () => {
+          const messageList = document.querySelector('[data-testid="message-list"]');
+          if (!messageList) return [];
+          const roots = Array.from(messageList.querySelectorAll('[data-testid="union_message"]')).filter(isVisible);
+          return roots.map(el => {
+            const isSend = !!el.querySelector('[data-testid="send_message"]');
+            const isReceive = !!el.querySelector('[data-testid="receive_message"]');
+            const textEl = el.querySelector('[data-testid="message_text_content"]');
+            const content = textEl ? (textEl.innerText || '').trim() : '';
+            return { role: isSend ? 'User' : isReceive ? 'Assistant' : '', text: content };
+          }).filter(t => t.role && t.text);
+        };
+
+        const beforeTurns = getVisibleTurns();
+
+        // Send message
+        const composer = findComposer();
+        if (!composer) return JSON.stringify({error: 'No input found'});
+
+        composer.focus();
+        if (composer instanceof HTMLTextAreaElement) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+          setter.call(composer, text);
+          composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: text, inputType: 'insertText'}));
+        } else {
+          composer.textContent = '';
+          document.execCommand('insertText', false, text);
+          composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: text, inputType: 'insertText'}));
+        }
+
+        await new Promise(r => setTimeout(r, 500));
+
+        // Click send button or press Enter
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(isVisible);
+        const sendBtn = buttons.find(b => {
+          const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).trim();
+          return /send|发送|提交/i.test(label) || b.getAttribute('type') === 'submit';
+        });
+        if (sendBtn) sendBtn.click();
+        else composer.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+
+        // Wait for response
+        const startTime = Date.now();
+        let lastText = '';
+        let stableCount = 0;
+        while (Date.now() - startTime < timeout * 1000) {
+          await new Promise(r => setTimeout(r, 2000));
+          const currentTurns = getVisibleTurns();
+          const beforeSet = new Set(beforeTurns.filter(t => t.role === 'Assistant').map(t => t.text));
+          const newAssistant = [...currentTurns].reverse().find(t => t.role === 'Assistant' && !beforeSet.has(t.text));
+          if (newAssistant && newAssistant.text) {
+            if (newAssistant.text === lastText) {
+              stableCount++;
+              if (stableCount >= 2) return JSON.stringify({response: newAssistant.text});
+            } else {
+              lastText = newAssistant.text;
+              stableCount = 0;
+            }
+          }
+        }
+        if (lastText) return JSON.stringify({response: lastText});
+        return JSON.stringify({response: '[NO RESPONSE] No response within ' + timeout + 's'});
+      })()
+    fields:
+      response:
+        json_path: "response"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+      timeout:
+        type: string
+        required: false
+        description: "Max seconds to wait (default: 60)"
+        default: "60"
+
+  new:
+    description: "Start a new conversation"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const labels = ['新对话', 'New Chat', '创建新对话'];
+        const buttons = Array.from(document.querySelectorAll('button, a, [role="button"]'));
+        for (const button of buttons) {
+          if (!isVisible(button)) continue;
+          const text = (button.innerText || button.textContent || '').trim();
+          const aria = (button.getAttribute('aria-label') || '').trim();
+          const title = (button.getAttribute('title') || '').trim();
+          if ([text, aria, title].some(v => labels.some(l => v.includes(l)))) {
+            button.click();
+            return JSON.stringify({status: 'new conversation started'});
+          }
+        }
+        window.location.href = 'https://www.doubao.com/chat/new-thread/create-by-msg';
+        return JSON.stringify({status: 'navigated to new chat'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}
+
+  read:
+    description: "Read current conversation messages"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const messageList = document.querySelector('[data-testid="message-list"]');
+        if (!messageList) return JSON.stringify({messages: 'No messages found'});
+
+        const roots = Array.from(messageList.querySelectorAll('[data-testid="union_message"]')).filter(isVisible);
+        const turns = roots.map(el => {
+          const isSend = !!el.querySelector('[data-testid="send_message"]');
+          const isReceive = !!el.querySelector('[data-testid="receive_message"]');
+          const textEl = el.querySelector('[data-testid="message_text_content"]');
+          const content = textEl ? (textEl.innerText || '').trim() : '';
+          const role = isSend ? 'User' : isReceive ? 'Assistant' : 'System';
+          return role + ': ' + content;
+        }).filter(t => t.length > 10);
+
+        return JSON.stringify({messages: turns.join('\n\n')});
+      })()
+    fields:
+      messages:
+        json_path: "messages"
+    params: {}
+
+  send:
+    description: "Send a message without waiting for response"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const text = '${{text}}';
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const composerSelectors = [
+          'textarea[data-testid="chat_input_input"]',
+          '[data-testid="chat_input"] textarea',
+          '.chat-input textarea',
+          'textarea',
+          '[contenteditable="true"]'
+        ];
+
+        let composer = null;
+        for (const selector of composerSelectors) {
+          const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
+          if (node) { composer = node; break; }
+        }
+        if (!composer) return JSON.stringify({status: 'error', error: 'No input found'});
+
+        composer.focus();
+        if (composer instanceof HTMLTextAreaElement) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+          setter.call(composer, text);
+          composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: text, inputType: 'insertText'}));
+        } else {
+          composer.textContent = '';
+          document.execCommand('insertText', false, text);
+          composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: text, inputType: 'insertText'}));
+        }
+
+        setTimeout(() => {
+          const buttons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(isVisible);
+          const sendBtn = buttons.find(b => {
+            const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).trim();
+            return /send|发送|提交/i.test(label) || b.getAttribute('type') === 'submit';
+          });
+          if (sendBtn) sendBtn.click();
+          else composer.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+        }, 500);
+
+        return JSON.stringify({status: 'sent', text: text});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  history:
+    description: "List conversation history from sidebar"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const sidebar = document.querySelector('[data-testid="flow_chat_sidebar"]');
+        if (!sidebar) return JSON.stringify({conversations: 'No sidebar found. Make sure you are logged in.'});
+
+        const items = Array.from(sidebar.querySelectorAll('a[data-testid="chat_list_thread_item"]'));
+        const conversations = items.map((a, i) => {
+          const href = a.getAttribute('href') || '';
+          const match = href.match(/\/chat\/(\d{10,})/);
+          const id = match ? match[1] : '';
+          const title = (a.textContent || '').trim().replace(/\s+/g, ' ').substring(0, 200);
+          return (i + 1) + '. ' + title + (id ? ' (id:' + id + ')' : '');
+        }).filter(Boolean);
+
+        return JSON.stringify({conversations: conversations.join('\n')});
+      })()
+    fields:
+      conversations:
+        json_path: "conversations"
+    params: {}
+
+  status:
+    description: "Check page availability and login state"
+    url: "https://www.doubao.com/chat"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const routerData = window._ROUTER_DATA?.loaderData?.chat_layout;
+        const isLogin = typeof routerData?.userSetting?.data?.is_login === 'boolean'
+          ? routerData.userSetting.data.is_login : null;
+        const status = isLogin === false ? 'Login Required' : 'Connected';
+        const login = isLogin === null ? 'Unknown' : isLogin ? 'Yes' : 'No';
+        return JSON.stringify({
+          status: status,
+          login: login,
+          url: window.location.href,
+          title: document.title || 'Doubao'
+        });
+      })()
+    fields:
+      status:
+        json_path: "status"
+      login:
+        json_path: "login"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}

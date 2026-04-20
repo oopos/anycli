@@ -1,0 +1,245 @@
+name: amazon
+description: "Amazon — Product search, detail pages, and bestseller rankings (requires login)"
+base_url: "https://www.amazon.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Amazon product search"
+    url: "https://www.amazon.com/s?k={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        window.scrollBy(0, 1500);
+        await new Promise(r => setTimeout(r, 1500));
+        const cards = Array.from(document.querySelectorAll('[data-component-type="s-search-result"]'));
+        const results = [];
+        for (const card of cards) {
+          const asin = card.getAttribute('data-asin') || '';
+          const title = (card.querySelector('h2')?.textContent || '').replace(/\s+/g, ' ').trim();
+          const href = card.querySelector('a.a-link-normal[href*="/dp/"]')?.href || '';
+          const priceText = (card.querySelector('.a-price .a-offscreen')?.textContent || '').trim();
+          const ratingText = card.querySelector('[aria-label*="out of 5 stars"]')?.getAttribute('aria-label') || '';
+          const reviewCountText = (card.querySelector('a[href*="#customerReviews"]')?.textContent || '').trim();
+          const sponsored = /sponsored/i.test(card.innerText || '');
+          const badges = Array.from(card.querySelectorAll('.a-badge-text')).map(n => (n.textContent || '').trim()).filter(Boolean);
+          if (!asin || !title) continue;
+          let productUrl = '';
+          if (href) {
+            try {
+              const parsed = new URL(href);
+              productUrl = parsed.origin + parsed.pathname;
+            } catch { productUrl = href; }
+          }
+          results.push({
+            asin,
+            title: title.slice(0, 120),
+            price: priceText,
+            rating: ratingText,
+            review_count: reviewCountText,
+            sponsored,
+            badges: badges.join(', '),
+            url: productUrl
+          });
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      asin:
+        json_path: "asin"
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      rating:
+        json_path: "rating"
+        default: ""
+      review_count:
+        json_path: "review_count"
+        default: ""
+      sponsored:
+        json_path: "sponsored"
+        default: "false"
+      badges:
+        json_path: "badges"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query, e.g. 'wireless earbuds'"
+
+  product:
+    description: "Amazon product detail page"
+    url: "https://www.amazon.com/dp/{asin}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const productTitle = normalize(document.querySelector('#productTitle, #title span, [data-feature-name="title"] h1 span')?.textContent);
+        const byline = normalize(document.querySelector('#bylineInfo, [data-feature-name="bylineInfo"] #bylineInfo')?.textContent);
+        const priceSelectors = [
+          '.a-price .a-offscreen',
+          '#priceblock_ourprice',
+          '#priceblock_dealprice',
+          '.apexPriceToPay .a-offscreen',
+          '#corePrice_feature_div .a-offscreen',
+          '#tp_price_block_total_price_ww .a-offscreen'
+        ];
+        let priceText = '';
+        for (const sel of priceSelectors) {
+          const t = normalize(document.querySelector(sel)?.textContent);
+          if (t) { priceText = t; break; }
+        }
+        const ratingText = document.querySelector('#acrPopover')?.getAttribute('title')
+          || normalize(document.querySelector('#acrPopover')?.textContent) || '';
+        const reviewCountText = normalize(document.querySelector('#acrCustomerReviewText')?.textContent);
+        const reviewUrl = document.querySelector('a[href*="#customerReviews"]')?.href || '';
+        const qaUrl = document.querySelector('a[href*="ask/questions"]')?.href || '';
+        const bullets = Array.from(document.querySelectorAll('#feature-bullets li .a-list-item'))
+          .map(n => normalize(n.textContent)).filter(Boolean).slice(0, 8);
+        const breadcrumbs = Array.from(document.querySelectorAll('#wayfinding-breadcrumbs_feature_div a'))
+          .map(n => normalize(n.textContent)).filter(Boolean);
+        const asinMatch = window.location.href.match(/\/(?:dp|gp\/product)\/([A-Z0-9]{10})/);
+        const asin = asinMatch ? asinMatch[1] : '';
+        const results = [{
+          asin,
+          title: productTitle,
+          brand: byline,
+          price: priceText,
+          rating: ratingText,
+          review_count: reviewCountText,
+          breadcrumbs: breadcrumbs.join(' > '),
+          bullet_points: bullets.join(' | '),
+          review_url: reviewUrl,
+          url: window.location.href
+        }];
+        return JSON.stringify(results);
+      })()
+    fields:
+      asin:
+        json_path: "asin"
+      title:
+        json_path: "title"
+      brand:
+        json_path: "brand"
+        default: ""
+      price:
+        json_path: "price"
+      rating:
+        json_path: "rating"
+        default: ""
+      review_count:
+        json_path: "review_count"
+        default: ""
+      breadcrumbs:
+        json_path: "breadcrumbs"
+        default: ""
+      bullet_points:
+        json_path: "bullet_points"
+        default: ""
+    params:
+      asin:
+        type: string
+        required: true
+        description: "Amazon ASIN or product URL (e.g. B0FJS72893)"
+
+  bestsellers:
+    description: "Amazon Best Sellers ranking page"
+    url: "https://www.amazon.com/gp/bestsellers/{category}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 1500));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const listTitle = normalize(
+          document.querySelector('#zg_banner_text')?.textContent
+          || document.querySelector('h1')?.textContent
+        );
+        const categoryTitle = normalize(
+          document.querySelector('#zg_browseRoot .zg_selected')?.textContent
+          || document.querySelector('#wayfinding-breadcrumbs_feature_div ul li:last-child')?.textContent
+        );
+        const cards = Array.from(document.querySelectorAll(
+          '.p13n-sc-uncoverable-faceout, .zg-grid-general-faceout, [data-asin][class*="p13n"]'
+        ));
+        const results = [];
+        for (let i = 0; i < cards.length; i++) {
+          const card = cards[i];
+          const rankText = normalize(card.querySelector('.zg-bdg-text')?.textContent || card.querySelector('[class*="rank"]')?.textContent);
+          const rank = parseInt(rankText) || (i + 1);
+          const asin = card.getAttribute('data-asin') || card.getAttribute('id') || '';
+          const title = normalize(
+            card.querySelector('[class*="line-clamp"]')?.textContent
+            || card.querySelector('img')?.getAttribute('alt')
+            || card.querySelector('a[href*="/dp/"]')?.textContent
+          );
+          const href = card.querySelector('a[href*="/dp/"], a[href*="/gp/product/"]')?.href || '';
+          const priceText = normalize(
+            card.querySelector('.a-price .a-offscreen')?.textContent
+            || card.querySelector('.a-color-price')?.textContent
+          );
+          const ratingText = card.querySelector('[aria-label*="out of 5 stars"]')?.getAttribute('aria-label') || '';
+          const reviewCountText = normalize(
+            card.querySelector('a[href*="#customerReviews"]')?.textContent
+            || card.querySelector('.a-size-small')?.textContent
+          );
+          if (!title) continue;
+          let productUrl = '';
+          if (href) {
+            try {
+              const parsed = new URL(href);
+              productUrl = parsed.origin + parsed.pathname;
+            } catch { productUrl = href; }
+          }
+          results.push({
+            rank,
+            asin,
+            title: title.slice(0, 120),
+            price: priceText,
+            rating: ratingText,
+            review_count: reviewCountText,
+            category: categoryTitle,
+            list_title: listTitle,
+            url: productUrl
+          });
+          if (results.length >= 50) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      asin:
+        json_path: "asin"
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+        default: ""
+      rating:
+        json_path: "rating"
+        default: ""
+      review_count:
+        json_path: "review_count"
+        default: ""
+      category:
+        json_path: "category"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      category:
+        type: string
+        required: false
+        default: ""
+        description: "Category path segment (e.g. 'electronics' or leave empty for top-level)"

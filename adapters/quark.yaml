@@ -1,0 +1,76 @@
+name: quark
+description: "夸克网盘 — 文件列表（需要登录）"
+base_url: "https://pan.quark.cn"
+version: "1.0.0"
+
+commands:
+  ls:
+    description: "列出夸克网盘文件和文件夹"
+    url: "https://pan.quark.cn"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const pdirFid = '{fid}' || '0';
+
+        const params = new URLSearchParams({
+          pr: 'ucpro',
+          fr: 'pc',
+          uc_param_str: '',
+          pdir_fid: pdirFid,
+          _page: '1',
+          _size: '100',
+          _fetch_total: '1',
+          _fetch_sub_dirs: '1',
+          _sort: 'file_type:asc,updated_at:desc'
+        });
+
+        const url = 'https://drive-pc.quark.cn/1/clouddrive/file/sort?' + params.toString();
+
+        const resp = await fetch(url, {
+          method: 'GET',
+          credentials: 'include',
+          headers: { 'Content-Type': 'application/json' }
+        }).then(r => r.json()).catch(() => null);
+
+        if (!resp || resp.status !== 200) {
+          const msg = resp ? (resp.message || 'request failed') : 'network error';
+          return JSON.stringify([{error: 'Quark Drive: ' + msg + '. Please login at pan.quark.cn first.'}]);
+        }
+
+        const data = resp.data || {};
+        const files = data.list || [];
+
+        function formatSize(bytes) {
+          if (!bytes || bytes === 0) return '-';
+          if (bytes < 1024) return bytes + ' B';
+          if (bytes < 1024*1024) return (bytes/1024).toFixed(1) + ' KB';
+          if (bytes < 1024*1024*1024) return (bytes/1024/1024).toFixed(1) + ' MB';
+          return (bytes/1024/1024/1024).toFixed(2) + ' GB';
+        }
+
+        const results = files.map(f => ({
+          name: f.file_name || '',
+          fid: f.fid || '',
+          is_dir: f.dir ? 'yes' : 'no',
+          size: f.dir ? '-' : formatSize(f.size),
+          updated: f.updated_at ? f.updated_at.slice(0, 16).replace('T', ' ') : ''
+        }));
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      name:
+        json_path: "name"
+      fid:
+        json_path: "fid"
+      is_dir:
+        json_path: "is_dir"
+      size:
+        json_path: "size"
+      updated:
+        json_path: "updated"
+    params:
+      fid:
+        type: string
+        default: "0"
+        description: "Parent folder ID (0 for root)"

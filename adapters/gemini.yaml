@@ -1,0 +1,210 @@
+name: gemini
+description: "Gemini - Google AI assistant"
+base_url: "https://gemini.google.com"
+version: "1.0.0"
+
+commands:
+  ask:
+    description: "Send a prompt and get response"
+    url: "https://gemini.google.com/app"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const prompt = '${{text}}';
+        const timeout = parseInt('${{timeout}}') || 60;
+
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const composerSelectors = [
+          '.ql-editor[contenteditable="true"]',
+          '.ql-editor[role="textbox"]',
+          '[contenteditable="true"][aria-label*="Gemini"]',
+          '[aria-label="Enter a prompt for Gemini"]'
+        ];
+
+        const findComposer = () => {
+          for (const selector of composerSelectors) {
+            const node = Array.from(document.querySelectorAll(selector)).find(isVisible);
+            if (node) return node;
+          }
+          return null;
+        };
+
+        // Get baseline transcript
+        const getTranscriptLines = () => {
+          const main = document.querySelector('main') || document.body;
+          const root = main.cloneNode(true);
+          root.querySelectorAll('button, nav, header, footer, script, style, noscript').forEach(n => n.remove());
+          return (root.innerText || '').trim().split('\n').map(l => l.trim()).filter(l => l && l.length <= 4000);
+        };
+
+        const beforeLines = getTranscriptLines();
+
+        // Insert text
+        const composer = findComposer();
+        if (!composer) return JSON.stringify({response: '[ERROR] Gemini composer not found'});
+
+        composer.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(composer);
+        range.collapse(false);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        composer.textContent = '';
+        document.execCommand('insertText', false, prompt);
+        composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: prompt, inputType: 'insertText'}));
+
+        await new Promise(r => setTimeout(r, 500));
+
+        // Click send button
+        const composerRect = composer.getBoundingClientRect();
+        const buttons = Array.from(document.querySelectorAll('button, [role="button"]')).filter(isVisible);
+        const sendBtn = buttons.find(b => {
+          if (b.disabled || b.getAttribute('aria-disabled') === 'true') return false;
+          const label = ((b.getAttribute('aria-label') || '') + ' ' + (b.textContent || '')).trim();
+          if (/main menu|microphone|upload|mode|tools|new chat/i.test(label)) return false;
+          if (/send|发送|submit/i.test(label)) return true;
+          const rect = b.getBoundingClientRect();
+          return rect.left >= composerRect.right - 160 && Math.abs(rect.top - composerRect.top) < 100;
+        });
+
+        if (sendBtn) sendBtn.click();
+        else {
+          composer.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, which: 13, bubbles: true}));
+        }
+
+        // Wait for response
+        const startTime = Date.now();
+        let lastText = '';
+        let stableCount = 0;
+        while (Date.now() - startTime < timeout * 1000) {
+          await new Promise(r => setTimeout(r, 2000));
+          const currentLines = getTranscriptLines();
+          const beforeSet = new Set(beforeLines);
+          const newLines = currentLines.filter(l => !beforeSet.has(l) && l !== prompt);
+          const candidate = newLines.join('\n').trim()
+            .replace(/Gemini can make mistakes\.?/gi, '')
+            .replace(/Google Terms/gi, '')
+            .replace(/Google Privacy Policy/gi, '')
+            .replace(/Opens in a new window/gi, '')
+            .trim();
+          if (candidate && candidate.length > 2) {
+            if (candidate === lastText) {
+              stableCount++;
+              if (stableCount >= 2) return JSON.stringify({response: candidate});
+            } else {
+              lastText = candidate;
+              stableCount = 0;
+            }
+          }
+        }
+        if (lastText) return JSON.stringify({response: lastText});
+        return JSON.stringify({response: '[NO RESPONSE] No Gemini response within ' + timeout + 's'});
+      })()
+    fields:
+      response:
+        json_path: "response"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Prompt to send"
+      timeout:
+        type: string
+        required: false
+        description: "Max seconds to wait (default: 60)"
+        default: "60"
+
+  new:
+    description: "Start a new conversation"
+    url: "https://gemini.google.com/app"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const candidates = Array.from(document.querySelectorAll('button, a')).filter(node => {
+          const text = (node.textContent || '').trim().toLowerCase();
+          const aria = (node.getAttribute('aria-label') || '').trim().toLowerCase();
+          return isVisible(node) && (
+            text === 'new chat' || aria === 'new chat' ||
+            text === '发起新对话' || aria === '发起新对话' ||
+            text === '新对话' || aria === '新对话'
+          );
+        });
+
+        const target = candidates.find(n => !n.hasAttribute('disabled')) || candidates[0];
+        if (target) {
+          target.click();
+          return JSON.stringify({status: 'new conversation started'});
+        }
+        window.location.href = 'https://gemini.google.com/app';
+        return JSON.stringify({status: 'navigated to new chat'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}
+
+  read:
+    description: "Read current conversation"
+    url: "https://gemini.google.com/app"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (el) => {
+          if (!(el instanceof HTMLElement)) return false;
+          const style = window.getComputedStyle(el);
+          if (style.display === 'none' || style.visibility === 'hidden') return false;
+          const rect = el.getBoundingClientRect();
+          return rect.width > 0 && rect.height > 0;
+        };
+
+        const selectors = [
+          '[data-testid*="message"]',
+          '[class*="message"]',
+          '[class*="conversation-turn"]',
+          '[class*="query-text"]',
+          '[class*="response-text"]'
+        ];
+
+        const roots = selectors.flatMap(s => Array.from(document.querySelectorAll(s)));
+        const unique = roots.filter((el, i, all) => all.indexOf(el) === i).filter(isVisible);
+
+        const turns = unique.map(el => {
+          const text = (el.innerText || '').replace(/\u00a0/g, ' ').trim();
+          if (!text) return null;
+          const roleAttr = [
+            el.getAttribute('data-message-author-role'),
+            el.getAttribute('data-role'),
+            el.getAttribute('class')
+          ].filter(Boolean).join(' ').toLowerCase();
+          let role = '';
+          if (roleAttr.includes('user') || roleAttr.includes('query')) role = 'User';
+          else if (roleAttr.includes('assistant') || roleAttr.includes('model') || roleAttr.includes('response')) role = 'Assistant';
+          return role ? role + ': ' + text : null;
+        }).filter(Boolean);
+
+        if (turns.length > 0) return JSON.stringify({messages: turns.join('\n\n')});
+
+        const main = document.querySelector('main') || document.body;
+        const text = (main.innerText || '').trim().substring(0, 5000);
+        return JSON.stringify({messages: text || 'No messages found'});
+      })()
+    fields:
+      messages:
+        json_path: "messages"
+    params: {}

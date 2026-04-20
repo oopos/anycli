@@ -1,0 +1,154 @@
+name: ones
+description: "ONES 项目管理 — 我的工作项和工作项详情（需要登录）"
+base_url: "https://ones.cn"
+version: "1.0.0"
+
+commands:
+  my-tasks:
+    description: "ONES — 我的工作项列表（需提供 team UUID）"
+    url: "https://ones.cn"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const team = '{team}';
+        if (!team) return JSON.stringify([{error: 'team parameter is required. Get it from URL: /team/<uuid>/...'}]);
+
+        // Get current user UUID from page context
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Try to get user info from the page's API
+        const userResp = await fetch('/project/api/project/team/' + team + '/stamps/me', {
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'}
+        }).then(r => r.json()).catch(() => null);
+
+        let userUuid = '';
+        if (userResp && userResp.uuid) {
+          userUuid = userResp.uuid;
+        } else {
+          // Fallback: try getting from cookies or page state
+          const meResp = await fetch('/project/api/project/auth/me', {
+            credentials: 'include',
+            headers: {'Content-Type': 'application/json'}
+          }).then(r => r.json()).catch(() => null);
+          if (meResp && meResp.uuid) userUuid = meResp.uuid;
+        }
+
+        if (!userUuid) return JSON.stringify([{error: 'Cannot determine user UUID. Please ensure you are logged in.'}]);
+
+        const body = {
+          query: { must: [{ equal: { assign: userUuid } }] },
+          sort: [{ server_update_stamp: { order: 'desc' } }],
+          group_by: '',
+          include_subtasks: false,
+          limit: 100,
+          offset: 0
+        };
+
+        const resp = await fetch('/project/api/project/team/' + team + '/filters/peek', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify(body)
+        }).then(r => r.json()).catch(() => null);
+
+        if (!resp) return JSON.stringify([{error: 'Failed to fetch tasks'}]);
+
+        const entries = [];
+        const groups = resp.groups || resp.data || [];
+        if (Array.isArray(groups)) {
+          for (const g of groups) {
+            const tasks = g.entries || g.tasks || g;
+            if (Array.isArray(tasks)) {
+              for (const t of tasks) entries.push(t);
+            }
+          }
+        }
+
+        const results = entries.slice(0, 100).map(t => ({
+          title: t.summary || t.title || '',
+          status: t.status_name || t.status || '',
+          project: t.project_name || '',
+          uuid: t.uuid || '',
+          updated: t.server_update_stamp ? new Date(t.server_update_stamp * 1000).toISOString().slice(0, 16).replace('T', ' ') : ''
+        }));
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      status:
+        json_path: "status"
+      project:
+        json_path: "project"
+      uuid:
+        json_path: "uuid"
+      updated:
+        json_path: "updated"
+    params:
+      team:
+        type: string
+        required: true
+        description: "Team UUID from URL /team/<uuid>/..."
+
+  task:
+    description: "ONES — 工作项详情"
+    url: "https://ones.cn"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const team = '{team}';
+        const id = '{id}';
+        if (!team) return JSON.stringify([{error: 'team parameter is required'}]);
+        if (!id) return JSON.stringify([{error: 'id parameter is required'}]);
+
+        const resp = await fetch('/project/api/project/team/' + team + '/task/' + encodeURIComponent(id) + '/info', {
+          method: 'GET',
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'}
+        }).then(r => r.json()).catch(() => null);
+
+        if (!resp || !resp.uuid) {
+          return JSON.stringify([{error: 'Task not found or access denied. Check task UUID and team.'}]);
+        }
+
+        const results = [{
+          uuid: resp.uuid || '',
+          summary: resp.summary || '',
+          number: resp.number != null ? String(resp.number) : '',
+          status: resp.status_name || resp.status_uuid || '',
+          assign: resp.assign_name || resp.assign || '',
+          owner: resp.owner_name || resp.owner || '',
+          project: resp.project_name || resp.project_uuid || '',
+          updated: resp.server_update_stamp ? new Date(resp.server_update_stamp * 1000).toISOString().slice(0, 16).replace('T', ' ') : ''
+        }];
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      uuid:
+        json_path: "uuid"
+      summary:
+        json_path: "summary"
+      number:
+        json_path: "number"
+      status:
+        json_path: "status"
+      assign:
+        json_path: "assign"
+      owner:
+        json_path: "owner"
+      project:
+        json_path: "project"
+      updated:
+        json_path: "updated"
+    params:
+      team:
+        type: string
+        required: true
+        description: "Team UUID from URL /team/<uuid>/..."
+      id:
+        type: string
+        required: true
+        description: "Work item UUID from URL /task/<id>"

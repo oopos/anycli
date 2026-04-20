@@ -1,0 +1,163 @@
+name: mubu
+description: "幕布 — 大纲文档列表、最近编辑和全局搜索（需要登录）"
+base_url: "https://mubu.com"
+version: "1.0.0"
+
+commands:
+  docs:
+    description: "列出幕布文档（默认根目录）"
+    url: "https://mubu.com/app"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const folderId = '{folder}' || '0';
+        const token = localStorage.getItem('Jwt-Token');
+        if (!token) return JSON.stringify([{error: 'Not logged in. Please login at mubu.com first.'}]);
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', 'https://api2.mubu.com/v3/api/list/get', true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Jwt-Token', token);
+          xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve(null); } };
+          xhr.onerror = () => resolve(null);
+          xhr.send(JSON.stringify({folderId: folderId}));
+        });
+
+        if (!resp || resp.code !== 0) return JSON.stringify([]);
+        const data = resp.data || {};
+
+        function formatDate(ts) {
+          if (!ts) return '';
+          const d = new Date(ts);
+          const pad = (n) => String(n).padStart(2, '0');
+          return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        const folders = (data.folders || []).map(f => ({
+          type: 'folder', id: f.id, name: f.name,
+          updated: formatDate(f.updateTime), starred: f.stared ? 'yes' : ''
+        }));
+        const docs = (data.documents || []).map(doc => ({
+          type: 'doc', id: doc.id, name: doc.name,
+          updated: formatDate(doc.updateTime), starred: doc.stared ? 'yes' : ''
+        }));
+
+        return JSON.stringify([...folders, ...docs].slice(0, 50));
+      })()
+    fields:
+      type:
+        json_path: "type"
+      id:
+        json_path: "id"
+      name:
+        json_path: "name"
+      updated:
+        json_path: "updated"
+      starred:
+        json_path: "starred"
+    params:
+      folder:
+        type: string
+        default: "0"
+        description: "文件夹 ID（默认根目录 0）"
+
+  recent:
+    description: "最近编辑的幕布文档"
+    url: "https://mubu.com/app"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const token = localStorage.getItem('Jwt-Token');
+        if (!token) return JSON.stringify([{error: 'Not logged in. Please login at mubu.com first.'}]);
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', 'https://api2.mubu.com/v3/api/list/get', true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Jwt-Token', token);
+          xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve(null); } };
+          xhr.onerror = () => resolve(null);
+          xhr.send(JSON.stringify({folderId: 'recent'}));
+        });
+
+        if (!resp || resp.code !== 0) return JSON.stringify([]);
+        const data = resp.data || {};
+
+        function formatDate(ts) {
+          if (!ts) return '';
+          const d = new Date(ts);
+          const pad = (n) => String(n).padStart(2, '0');
+          return d.getFullYear() + '-' + pad(d.getMonth()+1) + '-' + pad(d.getDate()) + ' ' + pad(d.getHours()) + ':' + pad(d.getMinutes());
+        }
+
+        const results = (data.documents || []).slice(0, 20).map(doc => ({
+          id: doc.id, name: doc.name, updated: formatDate(doc.updateTime)
+        }));
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      id:
+        json_path: "id"
+      name:
+        json_path: "name"
+      updated:
+        json_path: "updated"
+
+  search:
+    description: "全局搜索幕布文档和文件夹"
+    url: "https://mubu.com/app"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = '{query}';
+        if (!query) return JSON.stringify([{error: 'query parameter is required'}]);
+
+        const token = localStorage.getItem('Jwt-Token');
+        if (!token) return JSON.stringify([{error: 'Not logged in. Please login at mubu.com first.'}]);
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('POST', 'https://api2.mubu.com/v3/api/list/search', true);
+          xhr.setRequestHeader('Content-Type', 'application/json');
+          xhr.setRequestHeader('Jwt-Token', token);
+          xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve(null); } };
+          xhr.onerror = () => resolve(null);
+          xhr.send(JSON.stringify({keywords: query}));
+        });
+
+        if (!resp || resp.code !== 0) return JSON.stringify([]);
+        const data = resp.data || {};
+
+        const formatPath = (paths) => (paths || []).map(p => p.name).join(' > ');
+
+        const folders = (data.folders || []).map(f => ({
+          type: 'folder', id: f.id, name: f.name, path: formatPath(f.paths), hits: '', snippet: ''
+        }));
+        const docs = (data.documents || []).map(d => ({
+          type: 'doc', id: d.id, name: d.name, path: formatPath(d.paths),
+          hits: d.total > 0 ? String(d.total) : '',
+          snippet: (d.nodes || []).map(n => (n.text || '').replace(/<[^>]+>/g, '').trim()).filter(Boolean).join(' | ')
+        }));
+
+        return JSON.stringify([...folders, ...docs].slice(0, 100));
+      })()
+    fields:
+      type:
+        json_path: "type"
+      id:
+        json_path: "id"
+      name:
+        json_path: "name"
+      path:
+        json_path: "path"
+      hits:
+        json_path: "hits"
+      snippet:
+        json_path: "snippet"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"

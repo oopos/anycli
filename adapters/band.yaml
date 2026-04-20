@@ -1,0 +1,96 @@
+name: band
+description: "Band — 群组社交平台，查看群组和帖子（需登录）"
+base_url: "https://www.band.us"
+version: "1.0.0"
+
+commands:
+  bands:
+    description: "列出你加入的所有Band群组"
+    url: "https://www.band.us"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('a.bandCover._link')) break;
+          await sleep(300);
+        }
+        const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+        const seen = new Set();
+        const results = [];
+        for (const a of document.querySelectorAll('a.bandCover._link')) {
+          const m = (a.getAttribute('href') || '').match(/^\/band\/(\d+)(?:\/post)?\/?$/);
+          if (!m) continue;
+          const bandNo = Number(m[1]);
+          if (seen.has(bandNo)) continue;
+          seen.add(bandNo);
+          const nameEl = a.querySelector('p.uriText');
+          const name = nameEl ? norm(nameEl.textContent) : '';
+          if (!name) continue;
+          const memberEl = a.querySelector('span.member em');
+          const members = memberEl ? parseInt((memberEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0 : 0;
+          results.push({ band_no: bandNo, name, members });
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      band_no:
+        json_path: "band_no"
+      name:
+        json_path: "name"
+      members:
+        json_path: "members"
+    params: {}
+
+  posts:
+    description: "查看某个Band群组的帖子列表"
+    url: "https://www.band.us/band/{band_no}/post"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const sleep = ms => new Promise(r => setTimeout(r, ms));
+        const norm = s => (s || '').replace(/\s+/g, ' ').trim();
+        const limit = 20;
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelector('article.cContentsCard._postMainWrap')) break;
+          await sleep(300);
+        }
+        const stripTags = s => s.replace(/<\/?band:[^>]+>/g, '');
+        const results = [];
+        const postEls = document.querySelectorAll('article.cContentsCard._postMainWrap');
+        for (const el of postEls) {
+          const linkEl = el.querySelector('a[href*="/post/"]');
+          const href = linkEl?.getAttribute('href') || '';
+          if (!href) continue;
+          const url = href.startsWith('http') ? href : 'https://www.band.us' + href;
+          const author = norm(el.querySelector('a.text')?.textContent);
+          const date = norm(el.querySelector('time')?.textContent);
+          const bodyEl = el.querySelector('.postText._postText');
+          const content = bodyEl ? stripTags(norm(bodyEl.innerText || bodyEl.textContent)).slice(0, 120) : '';
+          const commentEl = el.querySelector('span.count');
+          const comments = commentEl ? parseInt((commentEl.textContent || '').replace(/[^0-9]/g, ''), 10) || 0 : 0;
+          if (results.length >= limit) break;
+          results.push({ date, author, content, comments, url });
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      date:
+        json_path: "date"
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      comments:
+        json_path: "comments"
+      url:
+        json_path: "url"
+    params:
+      band_no:
+        type: integer
+        required: true
+        description: "Band群组编号（通过 band bands 获取）"
+      limit:
+        type: integer
+        default: 20
+        description: "返回帖子数量"

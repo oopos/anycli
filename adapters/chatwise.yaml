@@ -1,0 +1,115 @@
+name: chatwise
+description: "ChatWise — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check ChatWise Desktop connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read the current ChatWise conversation history"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const selectors = [
+          '[data-message-id]',
+          '[class*="message"]',
+          '[class*="chat-item"]',
+          '[class*="bubble"]',
+          '[role="log"] > *'
+        ];
+        for (const sel of selectors) {
+          const nodes = document.querySelectorAll(sel);
+          if (nodes.length > 0) {
+            const content = Array.from(nodes).map(n => (n.innerText || n.textContent).trim()).filter(Boolean).join('\n\n---\n\n');
+            return JSON.stringify({content: content});
+          }
+        }
+        const main = document.querySelector('main, [role="main"], [class*="chat-container"], [class*="conversation"]');
+        if (main) return JSON.stringify({content: main.innerText || main.textContent});
+        return JSON.stringify({content: document.body.innerText});
+      })()
+    fields:
+      content:
+        json_path: "content"
+    params: {}
+
+  send:
+    description: "Send a message to the active ChatWise conversation"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        let composer = document.querySelector('textarea');
+        if (!composer) {
+          const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+          composer = editables.length > 0 ? editables[editables.length - 1] : null;
+        }
+        if (!composer) return JSON.stringify({status: 'error', error: 'Could not find input element'});
+        composer.focus();
+        if (composer.tagName === 'TEXTAREA') {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+          setter.call(composer, text);
+          composer.dispatchEvent(new Event('input', { bubbles: true }));
+        } else {
+          document.execCommand('insertText', false, text);
+        }
+        return JSON.stringify({status: 'injected', text: text});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  model:
+    description: "Get or switch the active AI model in ChatWise"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const selectors = [
+          '[class*="model"] span',
+          '[class*="Model"] span',
+          '[data-testid*="model"]',
+          'button[class*="model"]',
+          '[aria-label*="Model"]',
+          '[aria-label*="model"]'
+        ];
+        for (const sel of selectors) {
+          const el = document.querySelector(sel);
+          if (el) {
+            const text = (el.textContent || el.getAttribute('title') || '').trim();
+            if (text) return JSON.stringify({status: 'Active', model: text});
+          }
+        }
+        return JSON.stringify({status: 'Active', model: 'Unknown or Not Found'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+      model:
+        json_path: "model"
+    params: {}

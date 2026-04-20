@@ -1,0 +1,169 @@
+name: boss
+description: "BOSS直聘 — 招聘搜索与职位管理"
+base_url: "https://www.zhipin.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索职位（需要登录cookie）"
+    url: "https://www.zhipin.com/web/geek/job?query={query}&city=101010100"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = '{query}';
+        const cityCode = '101010100';
+        const page = {page};
+        const limit = {limit};
+
+        await new Promise(r => setTimeout(r, 1000));
+
+        const qs = new URLSearchParams({
+          scene: '1',
+          query: query,
+          city: cityCode,
+          page: String(page),
+          pageSize: '15',
+        });
+
+        const targetUrl = 'https://www.zhipin.com/wapi/zpgeek/search/joblist.json?' + qs.toString();
+        const resp = await fetch(targetUrl, { credentials: 'include' });
+        const data = await resp.json();
+
+        const zpData = data.zpData || {};
+        const batch = zpData.jobList || [];
+        const results = [];
+
+        for (const j of batch) {
+          if (!j.encryptJobId) continue;
+          results.push({
+            name: j.jobName,
+            salary: j.salaryDesc,
+            company: j.brandName,
+            area: [j.cityName, j.areaDistrict, j.businessDistrict].filter(Boolean).join('·'),
+            experience: j.jobExperience,
+            degree: j.jobDegree,
+            skills: (j.skills || []).join(','),
+            boss: j.bossName + ' · ' + j.bossTitle,
+            url: 'https://www.zhipin.com/job_detail/' + j.encryptJobId + '.html',
+          });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      name:
+        json_path: "name"
+      salary:
+        json_path: "salary"
+      company:
+        json_path: "company"
+      area:
+        json_path: "area"
+      experience:
+        json_path: "experience"
+      degree:
+        json_path: "degree"
+      skills:
+        json_path: "skills"
+      boss:
+        json_path: "boss"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword (e.g. AI agent, 前端)"
+      page:
+        type: integer
+        default: 1
+        description: "Page number"
+      limit:
+        type: integer
+        default: 15
+        description: "Number of results to return"
+
+  recommend:
+    description: "查看推荐候选人/新招呼列表（需要登录cookie）"
+    url: "https://www.zhipin.com/web/boss/chat"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = {limit};
+
+        await new Promise(r => setTimeout(r, 2000));
+
+        // Get label definitions
+        const labelResp = await fetch('https://www.zhipin.com/wapi/zprelation/friend/label/get', { credentials: 'include' });
+        const labelData = await labelResp.json();
+        const labelMap = {};
+        if (labelData.code === 0 && labelData.zpData?.labels) {
+          for (const l of labelData.zpData.labels) {
+            labelMap[l.labelId] = l.label;
+          }
+        }
+
+        // Get recommend list
+        const resp = await fetch('https://www.zhipin.com/wapi/zprelation/friend/recommendList?page=1&pageSize=50', { credentials: 'include' });
+        const data = await resp.json();
+        const friends = data.zpData?.result || [];
+
+        const results = friends.slice(0, limit).map(f => ({
+          name: f.name || '',
+          job_name: f.jobName || '',
+          last_time: f.lastTime || '',
+          labels: (f.relationLabelList || []).map(id => labelMap[id] || String(id)).join(', '),
+          encrypt_uid: f.encryptUid || '',
+        }));
+        return JSON.stringify(results);
+      })()
+    fields:
+      name:
+        json_path: "name"
+      job_name:
+        json_path: "job_name"
+      last_time:
+        json_path: "last_time"
+      labels:
+        json_path: "labels"
+      encrypt_uid:
+        json_path: "encrypt_uid"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  joblist:
+    description: "查看我发布的职位列表（需要登录cookie）"
+    url: "https://www.zhipin.com/web/boss/chat"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 2000));
+
+        const resp = await fetch('https://www.zhipin.com/wapi/zpjob/job/chatted/jobList', { credentials: 'include' });
+        const data = await resp.json();
+        const jobs = data.zpData || [];
+
+        const results = jobs.map(j => ({
+          job_name: j.jobName || '',
+          salary: j.salaryDesc || '',
+          city: j.address || '',
+          status: j.jobOnlineStatus === 1 ? '在线' : '已关闭',
+          encrypt_job_id: j.encryptJobId || '',
+        }));
+        return JSON.stringify(results);
+      })()
+    fields:
+      job_name:
+        json_path: "job_name"
+      salary:
+        json_path: "salary"
+      city:
+        json_path: "city"
+      status:
+        json_path: "status"
+      encrypt_job_id:
+        json_path: "encrypt_job_id"
+    params: {}

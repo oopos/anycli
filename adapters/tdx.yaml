@@ -1,0 +1,58 @@
+name: tdx
+description: "通达信 — 热搜榜排行"
+base_url: "https://pul.tdx.com.cn"
+version: "1.0.0"
+
+commands:
+  hot_rank:
+    description: "通达信热搜榜"
+    url: "https://pul.tdx.com.cn/site/app/gzhbd/tdx-topsearch/page-main.html?pageName=page_topsearch&tabClickIndex=0&subtabIndex=0"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = {limit};
+
+        await new Promise(r => setTimeout(r, 3000));
+
+        const cleanText = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+        const cells = document.querySelectorAll('div.top-cell[data-code]');
+        const results = [];
+        const seen = new Set();
+
+        cells.forEach((cell, idx) => {
+          if (results.length >= limit) return;
+          const symbol = cell.getAttribute('data-code') || '';
+          const name = cell.getAttribute('data-name') || '';
+          if (!symbol || !name || seen.has(symbol)) return;
+          seen.add(symbol);
+          const tagEls = cell.querySelectorAll('div.tips-item.gnbk');
+          const tags = Array.from(tagEls).map(t => cleanText(t)).filter(Boolean).join(',');
+          results.push({
+            rank: idx + 1,
+            symbol,
+            name,
+            changePercent: cleanText(cell.querySelector('div.top-zf')),
+            heat: cleanText(cell.querySelector('div.hotN')),
+            tags,
+          });
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      changePercent:
+        json_path: "changePercent"
+      heat:
+        json_path: "heat"
+      tags:
+        json_path: "tags"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"

@@ -1,0 +1,211 @@
+name: ke
+description: "贝壳找房 — 二手房、租房、小区信息（需登录）"
+base_url: "https://bj.ke.com"
+version: "1.0.0"
+
+commands:
+  ershoufang:
+    description: "二手房列表"
+    url: "https://{city}.ke.com/ershoufang/{district}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 2500));
+        const cards = document.querySelectorAll('.sellListContent li.clear');
+        const results = [];
+        for (const card of cards) {
+          const titleEl = card.querySelector('.title a');
+          const communityEl = card.querySelector('.positionInfo a');
+          const houseInfoEl = card.querySelector('.houseInfo');
+          const priceEl = card.querySelector('.totalPrice span');
+          const unitPriceEl = card.querySelector('.unitPrice span');
+          if (!titleEl) continue;
+          const houseText = (houseInfoEl ? houseInfoEl.textContent : '').replace(/\s+/g, ' ').trim();
+          const houseParts = houseText.split('|').map(s => s.trim());
+          let layout = '', area = '', direction = '';
+          for (const part of houseParts) {
+            if (/\d室\d厅/.test(part)) layout = part.match(/(\d室\d厅)/)[1];
+            else if (/平米|㎡/.test(part)) area = part;
+            else if (/^[东南西北]+$/.test(part.replace(/\s/g, ''))) direction = part;
+          }
+          if (!layout) {
+            const m = houseText.match(/(\d室\d厅)/);
+            if (m) layout = m[1];
+          }
+          results.push({
+            title: (titleEl.textContent || '').trim(),
+            url: titleEl.href || '',
+            community: (communityEl ? communityEl.textContent : '').trim(),
+            layout, area, direction,
+            total_price: ((priceEl ? priceEl.textContent : '').trim() || '') + '万',
+            unit_price: (unitPriceEl ? unitPriceEl.textContent : '').trim(),
+          });
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      community:
+        json_path: "community"
+      layout:
+        json_path: "layout"
+      area:
+        json_path: "area"
+      direction:
+        json_path: "direction"
+      total_price:
+        json_path: "total_price"
+      unit_price:
+        json_path: "unit_price"
+      url:
+        json_path: "url"
+    params:
+      city:
+        type: string
+        default: "bj"
+        description: "城市代码: bj(北京), sh(上海), gz(广州), sz(深圳)"
+      district:
+        type: string
+        default: ""
+        description: "区域拼音，如 chaoyang, haidian"
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"
+
+  zufang:
+    description: "租房列表"
+    url: "https://{city}.zu.ke.com/zufang/{district}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 2500));
+        const allLinks = document.querySelectorAll('a.twoline');
+        const results = [];
+        for (const titleEl of allLinks) {
+          let card = titleEl.closest('div');
+          if (!card) continue;
+          while (card && card.parentElement && !card.parentElement.classList.contains('content__list')) {
+            card = card.parentElement;
+          }
+          if (!card) continue;
+          const title = (titleEl.textContent || '').replace(/\s+/g, ' ').trim();
+          const href = titleEl.getAttribute('href') || '';
+          const baseUrl = window.location.origin;
+          const fullUrl = href.startsWith('http') ? href : baseUrl + href;
+          const allPs = card.querySelectorAll('p');
+          let community = '', area = '', layout = '';
+          for (const p of allPs) {
+            if ((p.className || '').indexOf('des') === -1) continue;
+            const links = p.querySelectorAll('a[title]');
+            if (links.length > 0) community = (links[links.length - 1].getAttribute('title') || '').trim();
+            const parts = p.textContent.replace(/\s+/g, ' ').trim().split('/');
+            for (const part of parts) {
+              const t = part.trim();
+              if (/㎡|平米/.test(t)) area = t;
+              else if (/室.*厅/.test(t)) layout = t;
+            }
+            break;
+          }
+          const emEls = card.querySelectorAll('em');
+          let priceText = '';
+          for (const em of emEls) {
+            const t = em.textContent.trim();
+            if (/^\d+$/.test(t)) { priceText = t; break; }
+          }
+          results.push({
+            title, url: fullUrl, community, area, layout,
+            price: priceText ? priceText + '元/月' : '',
+          });
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      community:
+        json_path: "community"
+      area:
+        json_path: "area"
+      layout:
+        json_path: "layout"
+      price:
+        json_path: "price"
+      url:
+        json_path: "url"
+    params:
+      city:
+        type: string
+        default: "bj"
+        description: "城市代码: bj(北京), sh(上海), gz(广州), sz(深圳)"
+      district:
+        type: string
+        default: ""
+        description: "区域拼音，如 chaoyang, haidian"
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"
+
+  xiaoqu:
+    description: "小区列表"
+    url: "https://{city}.ke.com/xiaoqu/{district}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 2500));
+        const selectors = ['.xiaoquListItem', 'li.xiaoquListItem', '.listContent li', 'ul.listContent li'];
+        let cards = [];
+        for (const sel of selectors) {
+          cards = document.querySelectorAll(sel);
+          if (cards.length > 0) break;
+        }
+        const results = [];
+        for (const card of cards) {
+          const imgLink = card.querySelector('a.img[title], a[title]');
+          const titleLink = card.querySelector('.title a');
+          const nameEl = titleLink || imgLink;
+          if (!nameEl) continue;
+          const name = (titleLink ? titleLink.textContent : imgLink.getAttribute('title')) || '';
+          const priceEl = card.querySelector('.totalPrice span');
+          const districtEl = card.querySelector('.positionInfo a, .district a');
+          const infoEl = card.querySelector('.positionInfo, .houseInfo, .xiaoquListItemInfo');
+          const saleEl = card.querySelector('.xiaoquListItemSellCount a, .houseInfo a');
+          const infoText = infoEl ? infoEl.textContent : '';
+          const yearMatch = infoText.match(/(\d{4})年/);
+          const priceText = (priceEl ? priceEl.textContent : '').trim();
+          results.push({
+            name: name.trim(),
+            district: (districtEl ? districtEl.textContent : '').trim(),
+            avg_price: priceText ? priceText + '元/平' : '暂无',
+            year: yearMatch ? yearMatch[1] : '',
+            on_sale: (saleEl ? saleEl.textContent : '').trim(),
+          });
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      name:
+        json_path: "name"
+      district:
+        json_path: "district"
+      avg_price:
+        json_path: "avg_price"
+      year:
+        json_path: "year"
+      on_sale:
+        json_path: "on_sale"
+    params:
+      city:
+        type: string
+        default: "bj"
+        description: "城市代码: bj(北京), sh(上海), gz(广州), sz(深圳)"
+      district:
+        type: string
+        default: ""
+        description: "区域拼音，如 chaoyang, haidian"
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"

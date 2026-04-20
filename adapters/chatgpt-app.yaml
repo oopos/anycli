@@ -1,0 +1,87 @@
+name: chatgpt-app
+description: "ChatGPT Desktop App — native macOS control via osascript + CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check ChatGPT Desktop App connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read the last visible ChatGPT response"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+        const last = msgs[msgs.length - 1];
+        if (!last) return JSON.stringify({role: 'System', text: 'No visible chat messages found.'});
+        return JSON.stringify({role: 'Assistant', text: (last.textContent || '').trim()});
+      })()
+    fields:
+      role:
+        json_path: "role"
+      text:
+        json_path: "text"
+    params: {}
+
+  send:
+    description: "Send a message to ChatGPT Desktop App"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        const textarea = document.querySelector('#prompt-textarea, textarea[data-id], [contenteditable="true"][data-placeholder]');
+        if (!textarea) return JSON.stringify({status: 'error', error: 'No input found'});
+        if (textarea.tagName === 'TEXTAREA') {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+          setter.call(textarea, text);
+          textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        } else {
+          textarea.focus();
+          document.execCommand('insertText', false, text);
+        }
+        const btn = document.querySelector('[data-testid="send-button"], button[aria-label*="Send"]');
+        if (btn) btn.click();
+        return JSON.stringify({status: 'sent'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  new:
+    description: "Start a new ChatGPT conversation"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const btn = document.querySelector('nav a[href="/"]') || document.querySelector('[data-testid="new-chat-button"]');
+        if (btn) { btn.click(); return JSON.stringify({status: 'new conversation started'}); }
+        return JSON.stringify({status: 'error', error: 'Could not find new chat button'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}

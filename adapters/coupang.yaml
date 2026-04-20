@@ -1,0 +1,156 @@
+name: coupang
+description: "Coupang — 쿠팡 상품 검색 (requires login)"
+base_url: "https://www.coupang.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Coupang product search"
+    url: "https://www.coupang.com/np/search?q={query}&channel=user&page={page}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        window.scrollBy(0, 1500);
+        await new Promise(r => setTimeout(r, 2000));
+        window.scrollBy(0, 1500);
+        await new Promise(r => setTimeout(r, 1500));
+
+        const normalizeText = (value) => (value == null ? '' : String(value).trim());
+        const parseNum = (value) => {
+          const text = normalizeText(value).replace(/[^\d.]/g, '');
+          if (!text) return null;
+          const num = Number(text);
+          return Number.isFinite(num) ? num : null;
+        };
+        const extractPriceInfo = (root) => {
+          const priceArea = root.querySelector('[class*="PriceArea_priceArea"], [class*="priceArea"]') || root;
+          const priceAreaText = normalizeText(priceArea.textContent || '');
+          const originalPrice = normalizeText(
+            priceArea.querySelector('del, .base-price, .origin-price, .original-price, [class*="base-price"], [class*="origin-price"], [class*="line-through"]')?.textContent || ''
+          );
+          const unitPrice = normalizeText(
+            priceArea.querySelector('.unit-price, [class*="unit-price"], [class*="unitPrice"]')?.textContent || ''
+          ) || (priceAreaText.match(/\([^)]*당\s*[^)]*원[^)]*\)/)?.[0] || '');
+          const candidates = Array.from(priceArea.querySelectorAll('span, strong, div'))
+            .map(node => {
+              const text = normalizeText(node.textContent || '');
+              if (!text || !/\d/.test(text)) return null;
+              if (/\d{1,2}:\d{2}:\d{2}/.test(text)) return null;
+              if (/당\s*\d/.test(text)) return null;
+              if (/^\d+%$/.test(text)) return null;
+              const num = parseNum(text);
+              if (num == null || num < 100) return null;
+              const className = normalizeText(node.getAttribute('class') || '').toLowerCase();
+              let score = 0;
+              if (/price|sale|selling|final/.test(className)) score += 6;
+              if (/red/.test(className)) score += 5;
+              if (/font-bold|bold/.test(className)) score += 3;
+              if (/line-through/.test(className)) score -= 12;
+              if (text.includes('원')) score += 2;
+              const originalNum = parseNum(originalPrice);
+              if (originalNum != null && num === originalNum) score -= 10;
+              return { text, num, score };
+            })
+            .filter(Boolean)
+            .sort((a, b) => b.score - a.score);
+          const currentPrice = candidates[0]?.text || '';
+          return { price: currentPrice, originalPrice, unitPrice };
+        };
+        const canonicalUrl = (url, productId) => {
+          if (url) {
+            try {
+              const parsed = new URL(url, 'https://www.coupang.com');
+              const match = parsed.pathname.match(/\/vp\/products\/(\d+)/);
+              return 'https://www.coupang.com/vp/products/' + (match?.[1] || productId || '');
+            } catch {}
+          }
+          return productId ? 'https://www.coupang.com/vp/products/' + productId : '';
+        };
+
+        const domScanLimit = 60;
+        const cards = Array.from(new Set([
+          ...document.querySelectorAll('li.search-product'),
+          ...document.querySelectorAll('li[class*="search-product"], div[class*="search-product"], article[class*="search-product"]'),
+          ...document.querySelectorAll('li[class*="ProductUnit_productUnit"], [class*="ProductUnit_productUnit"]'),
+          ...document.querySelectorAll('[data-product-id]'),
+          ...document.querySelectorAll('a[href*="/vp/products/"]'),
+        ])).slice(0, domScanLimit);
+
+        const results = [];
+        for (const el of cards) {
+          const root = el.closest('li, div, article, section') || el;
+          const html = root.innerHTML || '';
+          const priceInfo = extractPriceInfo(root);
+          const productId =
+            root.getAttribute('data-product-id') ||
+            el.getAttribute('data-product-id') ||
+            root.querySelector('a[href*="/vp/products/"]')?.getAttribute('href')?.match(/\/vp\/products\/(\d+)/)?.[1] ||
+            html.match(/\/vp\/products\/(\d+)/)?.[1] ||
+            (el.getAttribute('href') || '').match(/\/vp\/products\/(\d+)/)?.[1] ||
+            '';
+          const title = normalizeText(
+            root.querySelector('.name, .title, .product-name, [class*="ProductUnit_productName"], [class*="productName"], [class*="product-name"], [class*="title"]')?.textContent ||
+            root.querySelector('img[alt]')?.getAttribute('alt') || ''
+          );
+          const rating = normalizeText(
+            root.querySelector('[class*="rating"], [class*="star"], [class*="ProductRating"] [aria-label]')?.getAttribute?.('aria-label') ||
+            root.querySelector('[class*="rating"], [class*="star"], [class*="ProductRating"]')?.textContent || ''
+          );
+          const reviewCount = normalizeText(
+            root.querySelector('.rating-total-count, [class*="review"], [class*="count"], [class*="ProductRating"] span')?.textContent || ''
+          );
+          const badgeNodes = Array.from(root.querySelectorAll('.badge, .delivery, [class*="badge"], [class*="delivery"]'));
+          const deliveryText = badgeNodes.map(n => normalizeText(n.textContent)).filter(Boolean).join(' ');
+          const hrefNode = root.querySelector('a[href*="/vp/products/"]');
+          const url = canonicalUrl(hrefNode?.getAttribute('href') || '', productId);
+
+          if (!title || !productId) continue;
+          results.push({
+            product_id: productId,
+            title: title.slice(0, 120),
+            price: priceInfo.price,
+            original_price: priceInfo.originalPrice,
+            unit_price: priceInfo.unitPrice,
+            rating,
+            review_count: reviewCount.replace(/[^\d]/g, ''),
+            delivery: deliveryText.slice(0, 60),
+            url
+          });
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      product_id:
+        json_path: "product_id"
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      original_price:
+        json_path: "original_price"
+        default: ""
+      unit_price:
+        json_path: "unit_price"
+        default: ""
+      rating:
+        json_path: "rating"
+        default: ""
+      review_count:
+        json_path: "review_count"
+        default: ""
+      delivery:
+        json_path: "delivery"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword (e.g. '무선 이어폰')"
+      page:
+        type: integer
+        default: 1
+        description: "Search result page number"

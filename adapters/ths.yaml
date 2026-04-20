@@ -1,0 +1,58 @@
+name: ths
+description: "同花顺 — 热股榜排行"
+base_url: "https://eq.10jqka.com.cn"
+version: "1.0.0"
+
+commands:
+  hot_rank:
+    description: "同花顺热股榜"
+    url: "https://eq.10jqka.com.cn/webpage/ths-hot-list/index.html?showStatusBar=true"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = {limit};
+
+        await new Promise(r => setTimeout(r, 3000));
+
+        const cleanText = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+        const cards = document.querySelectorAll('div.pt-22.pb-24.bgc-white.border');
+        const results = [];
+        const seen = new Set();
+
+        cards.forEach((card, idx) => {
+          if (results.length >= limit) return;
+          const row = card.querySelector('div.flex.bgc-white');
+          if (!row) return;
+          const nameEl = row.querySelector('span.ellipsis');
+          const name = cleanText(nameEl);
+          if (!name || seen.has(name)) return;
+          seen.add(name);
+          const tagEls = card.querySelectorAll('div.tag.PFSC-R');
+          const tags = Array.from(tagEls).map(t => cleanText(t)).filter(Boolean).join(',');
+          const rankEl = row.querySelector('div.THSMF-M.bold');
+          results.push({
+            rank: cleanText(rankEl) || String(idx + 1),
+            name,
+            changePercent: cleanText(row.querySelector('div.range')),
+            heat: cleanText(row.querySelector('div.col4 > span')),
+            tags,
+          });
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      name:
+        json_path: "name"
+      changePercent:
+        json_path: "changePercent"
+      heat:
+        json_path: "heat"
+      tags:
+        json_path: "tags"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"

@@ -1,0 +1,145 @@
+name: sinablog
+description: "新浪博客 — 热门文章、搜索和文章详情"
+base_url: "https://blog.sina.com.cn"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "获取新浪博客热门文章"
+    url: "https://blog.sina.com.cn/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 1500));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const abs = (href) => {
+          if (!href) return '';
+          if (href.startsWith('//')) return 'https:' + href;
+          if (href.startsWith('http')) return href;
+          return 'https://blog.sina.com.cn' + (href.startsWith('/') ? '' : '/') + href;
+        };
+        const seeds = [];
+        const seen = new Set();
+        for (const link of document.querySelectorAll('.day-hot-rank .art-list a[href*="/s/blog_"], .hot-rank .art-list a[href*="/s/blog_"]')) {
+          const title = normalize(link.textContent);
+          const url = abs(link.getAttribute('href') || '');
+          if (!title || !url || seen.has(url)) continue;
+          seen.add(url);
+          seeds.push({ rank: seeds.length + 1, title, url });
+          if (seeds.length >= 20) break;
+        }
+        const results = [];
+        for (const item of seeds) {
+          let merged = { rank: item.rank, title: item.title, author: '', date: '', url: item.url };
+          try {
+            const resp = await fetch(item.url, { credentials: 'include' });
+            if (resp.ok) {
+              const html = await resp.text();
+              const doc = new DOMParser().parseFromString(html, 'text/html');
+              const titleParts = normalize(doc.title).split('_').map(p => normalize(p)).filter(Boolean);
+              const timeText = normalize(doc.querySelector('.time, .articalInfo .time')?.textContent).replace(/[()]/g, '');
+              merged.author = titleParts[1] || '';
+              merged.date = timeText || '';
+            }
+          } catch {}
+          results.push(merged);
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      date:
+        json_path: "date"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "返回的文章数量"
+
+  search:
+    description: "搜索新浪博客文章（通过新浪搜索API）"
+    url: "https://search.sina.com.cn/api/search?q={keyword}&tp=mix&sort=0&page=1&size=20&from=search_result"
+    format: json
+    selector: "data.list"
+    fields:
+      rank:
+        json_path: "@index"
+        transform: "add_one"
+      title:
+        json_path: "title"
+        transform: strip_html
+      author:
+        json_path: "media_show"
+        default: ""
+      date:
+        json_path: "time"
+        default: ""
+      description:
+        json_path: "intro"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      keyword:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "返回的文章数量"
+    headers:
+      User-Agent: "Mozilla/5.0"
+      Accept: "application/json"
+
+  article:
+    description: "获取新浪博客单篇文章详情"
+    url: "{url}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 1500));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const title = normalize(document.querySelector('.articalTitle h2, .title h2, h1, h2.titName')?.textContent);
+        const titleParts = normalize(document.title).split('_').map(p => normalize(p)).filter(Boolean);
+        const author = titleParts[1] || title.split(/[：:]/)[0] || '';
+        const timeText = normalize(document.querySelector('.time, .articalInfo .time')?.textContent).replace(/[()]/g, '');
+        const date = timeText || normalize(document.body.innerText.match(/\b\d{4}-\d{2}-\d{2}(?:\s+\d{2}:\d{2}:\d{2})?\b/)?.[0]);
+        const category = normalize(document.querySelector('.articalTag .blog_class a, .blog_class a')?.textContent);
+        const tags = Array.from(document.querySelectorAll('.blog_tag h3, .blog_tag a, .tag a, .artical_tag a'))
+          .map(n => normalize(n.textContent)).filter(Boolean);
+        const content = normalize(document.querySelector('.articalContent, .blog_content, .content, #sina_keyword_ad_area2')?.textContent).slice(0, 500);
+        return JSON.stringify([{
+          title, author, date, category,
+          tags: tags.join(', '),
+          content: content + (content.length >= 500 ? '...' : ''),
+          url: window.location.href,
+        }]);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      date:
+        json_path: "date"
+      category:
+        json_path: "category"
+      tags:
+        json_path: "tags"
+      content:
+        json_path: "content"
+      url:
+        json_path: "url"
+    params:
+      url:
+        type: string
+        required: true
+        description: "文章URL（如 https://blog.sina.com.cn/s/blog_xxx.html）"

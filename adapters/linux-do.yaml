@@ -1,0 +1,146 @@
+name: linux-do
+description: "linux.do — Linux 中文社区热门与最新话题（需登录）"
+base_url: "https://linux.do"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "热门话题（Top）"
+    url: "https://linux.do"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const period = 'weekly';
+        const limit = 20;
+        try {
+          const res = await fetch('/top.json?period=' + period + '&per_page=' + limit, { credentials: 'include' });
+          const data = await res.json();
+          const topics = data?.topic_list?.topics || [];
+          return JSON.stringify(topics.slice(0, limit).map(t => ({
+            title: t.fancy_title || t.title || '',
+            replies: Math.max(0, (t.posts_count || 1) - 1),
+            created: t.created_at || '',
+            likes: t.like_count || 0,
+            views: t.views || 0,
+            url: 'https://linux.do/t/topic/' + t.id,
+          })));
+        } catch(e) {
+          return JSON.stringify([{title: 'Error: ' + e.message, replies: 0, created: '', likes: 0, views: 0, url: ''}]);
+        }
+      })()
+    fields:
+      title:
+        json_path: "title"
+      replies:
+        json_path: "replies"
+      created:
+        json_path: "created"
+      likes:
+        json_path: "likes"
+      views:
+        json_path: "views"
+      url:
+        json_path: "url"
+    params:
+      period:
+        type: string
+        default: "weekly"
+        description: "Time period: all, daily, weekly, monthly, quarterly, yearly"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of items"
+
+  latest:
+    description: "最新话题"
+    url: "https://linux.do"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = 20;
+        try {
+          const res = await fetch('/latest.json?per_page=' + limit, { credentials: 'include' });
+          const data = await res.json();
+          const topics = data?.topic_list?.topics || [];
+          return JSON.stringify(topics.slice(0, limit).map(t => ({
+            title: t.fancy_title || t.title || '',
+            replies: Math.max(0, (t.posts_count || 1) - 1),
+            created: t.created_at || '',
+            likes: t.like_count || 0,
+            views: t.views || 0,
+            url: 'https://linux.do/t/topic/' + t.id,
+          })));
+        } catch(e) {
+          return JSON.stringify([{title: 'Error: ' + e.message, replies: 0, created: '', likes: 0, views: 0, url: ''}]);
+        }
+      })()
+    fields:
+      title:
+        json_path: "title"
+      replies:
+        json_path: "replies"
+      created:
+        json_path: "created"
+      likes:
+        json_path: "likes"
+      views:
+        json_path: "views"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of items"
+
+  topic:
+    description: "查看帖子内容和回复"
+    url: "https://linux.do"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const topicId = '{id}';
+        const limit = 20;
+        const strip = (html) => (html || '')
+          .replace(/<br\s*\/?>/gi, ' ')
+          .replace(/<\/(p|div|li|blockquote|h[1-6])>/gi, ' ')
+          .replace(/<[^>]+>/g, '')
+          .replace(/&nbsp;/g, ' ')
+          .replace(/&amp;/g, '&')
+          .replace(/&lt;/g, '<')
+          .replace(/&gt;/g, '>')
+          .replace(/&quot;/g, '"')
+          .replace(/\s+/g, ' ')
+          .trim();
+        try {
+          const res = await fetch('/t/' + topicId + '.json', { credentials: 'include' });
+          const data = await res.json();
+          const posts = (data?.post_stream?.posts || []);
+          return JSON.stringify(posts.slice(0, limit).map(p => ({
+            author: p.username,
+            content: strip(p.cooked).slice(0, 200),
+            likes: p.like_count,
+            created_at: p.created_at || '',
+          })));
+        } catch(e) {
+          return JSON.stringify([{author: 'Error', content: e.message, likes: 0, created_at: ''}]);
+        }
+      })()
+    fields:
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      likes:
+        json_path: "likes"
+      created_at:
+        json_path: "created_at"
+    params:
+      id:
+        type: integer
+        required: true
+        description: "Topic ID"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to show"

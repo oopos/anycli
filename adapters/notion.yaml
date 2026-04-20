@@ -1,0 +1,99 @@
+name: notion
+description: "Notion — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check Notion Desktop connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read the content of the currently open Notion page"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const titleEl = document.querySelector('[data-block-id] [placeholder="Untitled"], .notion-page-block .notranslate, h1.notion-title, [class*="title"]');
+        const title = titleEl ? (titleEl.textContent || '').trim() : document.title;
+        const frame = document.querySelector('.notion-page-content, [class*="page-content"], .layout-content, main');
+        const content = frame ? (frame.innerText || frame.textContent || '').trim() : '';
+        return JSON.stringify({title: title || 'Untitled', content: content || '(empty page)'});
+      })()
+    fields:
+      title:
+        json_path: "title"
+      content:
+        json_path: "content"
+    params: {}
+
+  search:
+    description: "Search pages and databases in Notion via Quick Find"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const items = document.querySelectorAll('[role="option"], [class*="searchResult"], [class*="quick-find"] [role="button"]');
+        const results = Array.from(items).slice(0, 20).map((item, i) => ({
+          index: i + 1,
+          title: (item.textContent || '').trim().substring(0, 120)
+        }));
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "[].index"
+      title:
+        json_path: "[].title"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query (open Quick Find with Cmd+P first)"
+
+  sidebar:
+    description: "List pages and databases from the Notion sidebar"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const results = [];
+        const selectors = [
+          '[class*="sidebar"] [role="treeitem"]',
+          '[class*="sidebar"] a',
+          '.notion-sidebar [role="button"]',
+          'nav [role="treeitem"]'
+        ];
+        for (const sel of selectors) {
+          const nodes = document.querySelectorAll(sel);
+          if (nodes.length > 0) {
+            nodes.forEach((n, i) => {
+              const text = (n.textContent || '').trim().substring(0, 100);
+              if (text && text.length > 1) results.push({ index: i + 1, title: text });
+            });
+            break;
+          }
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "[].index"
+      title:
+        json_path: "[].title"
+    params: {}

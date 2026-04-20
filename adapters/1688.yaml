@@ -1,0 +1,263 @@
+name: 1688
+description: "1688 — 阿里巴巴批发平台商品搜索、详情、店铺信息（需要登录）"
+base_url: "https://www.1688.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "1688 商品搜索"
+    url: "https://s.1688.com/selloffer/offer_search.htm?keywords={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 1500));
+        const normalizeText = (value) => (value || '').replace(/\s+/g, ' ').trim();
+        const normalizeUrl = (href) => {
+          if (!href) return '';
+          try { return new URL(href, window.location.href).toString(); } catch { return ''; }
+        };
+        const ITEM_URL_PATTERNS = ['detail.1688.com/offer/', 'detail.m.1688.com/page/index.html?offerId='];
+        const isItemHref = (href) => ITEM_URL_PATTERNS.some((p) => (href || '').includes(p));
+        const isSellerHref = (href) => {
+          if (!href) return false;
+          try {
+            const url = new URL(href, window.location.href);
+            const host = url.hostname || '';
+            if (!host.endsWith('.1688.com')) return false;
+            if (['s.1688.com','r.1688.com','air.1688.com','detail.1688.com','detail.m.1688.com','dj.1688.com'].includes(host)) return false;
+            return true;
+          } catch { return false; }
+        };
+        const collectTexts = (root, selector) => [...new Set(
+          Array.from(root.querySelectorAll(selector)).map(n => normalizeText(n.innerText || n.textContent || '')).filter(Boolean)
+        )];
+        const firstText = (root, selectors) => {
+          for (const sel of selectors) {
+            const node = root.querySelector(sel);
+            const v = normalizeText(node ? node.innerText || node.textContent || '' : '');
+            if (v) return v;
+          }
+          return '';
+        };
+        const pickContainer = (anchor) => {
+          let node = anchor;
+          while (node && node !== document.body) {
+            const text = normalizeText(node.innerText || node.textContent || '');
+            if (text.length >= 40 && text.length <= 2000) return node;
+            node = node.parentElement;
+          }
+          return anchor;
+        };
+        const anchors = Array.from(document.querySelectorAll('a')).filter(a => isItemHref(a.href || ''));
+        const seen = new Set();
+        const results = [];
+        for (const anchor of anchors) {
+          const href = anchor.href || '';
+          if (!href || seen.has(href)) continue;
+          seen.add(href);
+          const container = pickContainer(anchor);
+          const sellerAnchor = Array.from(container.querySelectorAll('a')).find(l => isSellerHref(l.href || ''));
+          const containerText = normalizeText(container.innerText || container.textContent || '');
+          const title = firstText(container, ['.offer-title-row .title-text', '.offer-title-row'])
+            || normalizeText(anchor.innerText || anchor.textContent || '');
+          const priceText = firstText(container, ['.offer-price-row .price-item']);
+          const salesText = firstText(container, ['.offer-price-row .col-desc_after', '.offer-desc-row .col-desc_after']);
+          const sellerName = sellerAnchor ? normalizeText(sellerAnchor.innerText || sellerAnchor.textContent || '') : '';
+          const sellerUrl = sellerAnchor ? sellerAnchor.href : '';
+          const locationMatch = containerText.match(/([\u4e00-\u9fa5]{2,4}(?:省|市|区|县)?\s*[\u4e00-\u9fa5]{2,6}(?:市|区|县)?)/);
+          const location = locationMatch ? locationMatch[1] : '';
+          if (!title || title.length < 3) continue;
+          results.push({
+            title: title.slice(0, 100),
+            price: priceText,
+            sales: salesText,
+            seller_name: sellerName,
+            seller_url: sellerUrl,
+            location: location,
+            url: href
+          });
+          if (results.length >= 30) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      sales:
+        json_path: "sales"
+        default: ""
+      seller_name:
+        json_path: "seller_name"
+        default: ""
+      location:
+        json_path: "location"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词，如 置物架"
+
+  item:
+    description: "1688 商品详情"
+    url: "https://detail.1688.com/offer/{offer_id}.html"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const root = window.context ?? {};
+        const model = root.result?.global?.globalData?.model ?? null;
+        const toJson = (value) => JSON.parse(JSON.stringify(value ?? null));
+        const trade = model?.tradeModel;
+        const seller = model?.sellerModel;
+        const gallery = root.result?.data?.gallery?.fields ?? null;
+        const shipping = root.result?.data?.shippingServices?.fields ?? null;
+        const bodyText = (document.body ? document.body.innerText || '' : '').replace(/\s+/g, ' ').trim();
+        const title = model?.offerTitleModel?.subject || (document.title || '').replace(/\s*-\s*阿里巴巴$/, '').trim();
+        const offerId = trade?.offerId || '';
+        const priceDisplay = trade?.priceDisplay || '';
+        const price = priceDisplay ? '¥' + priceDisplay : '';
+        const unit = trade?.unit || '';
+        const beginAmount = trade?.beginAmount;
+        let moq = '';
+        const moqMatch = bodyText.match(/\d+(?:\.\d+)?\s*(件|个|套|箱|包|双|台|把|只)\s*起批/);
+        if (moqMatch) moq = moqMatch[0];
+        else if (beginAmount) moq = beginAmount + (unit || '') + '起批';
+        const sellerName = seller?.companyName || '';
+        const sellerUrl = seller?.winportUrl || seller?.sellerWinportUrlMap?.defaultUrl || '';
+        const memberId = seller?.memberId || '';
+        const images = [
+          ...(gallery?.mainImage ?? []),
+          ...(gallery?.offerImgList ?? []),
+          ...((gallery?.wlImageInfos ?? []).map(i => i.fullPathImageURI ?? ''))
+        ].filter(Boolean).slice(0, 5);
+        const salesMatch = bodyText.match(/(?:全网销量|已售)\s*\d+(?:\.\d+)?\+?\s*[件套个单]?/);
+        const sales = salesMatch ? salesMatch[0].trim() : '';
+        const stockMatch = bodyText.match(/库存\s*(\d+)/);
+        const stock = stockMatch ? parseInt(stockMatch[1]) : null;
+        const deliveryMatch = bodyText.match(/\d+\s*(?:小时|天)(?:内)?发货/);
+        const delivery = shipping?.deliveryLimitText || shipping?.logisticsText || (deliveryMatch ? deliveryMatch[0] : '');
+        const priceTiers = (trade?.offerPriceModel?.currentPrices ?? []).map(t => ({
+          min_qty: t.beginAmount || '',
+          price: t.price ? '¥' + t.price : ''
+        }));
+        const results = [{
+          offer_id: String(offerId),
+          title,
+          price,
+          moq,
+          price_tiers: JSON.stringify(priceTiers),
+          seller_name: sellerName,
+          seller_url: sellerUrl,
+          member_id: memberId,
+          sales,
+          stock,
+          delivery,
+          images: JSON.stringify(images)
+        }];
+        return JSON.stringify(results);
+      })()
+    fields:
+      offer_id:
+        json_path: "offer_id"
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      moq:
+        json_path: "moq"
+        default: ""
+      price_tiers:
+        json_path: "price_tiers"
+        default: "[]"
+      seller_name:
+        json_path: "seller_name"
+        default: ""
+      member_id:
+        json_path: "member_id"
+        default: ""
+      sales:
+        json_path: "sales"
+        default: ""
+      delivery:
+        json_path: "delivery"
+        default: ""
+    params:
+      offer_id:
+        type: string
+        required: true
+        description: "1688 商品 offer ID（如 887904326744）"
+
+  store:
+    description: "1688 店铺/供应商公开信息"
+    url: "https://{member_id}.1688.com/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const bodyText = (document.body ? document.body.innerText || '' : '');
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const extractMetric = (text, label) => {
+          const re = new RegExp(label + '[：:\\s]*([^\\n]{1,50})');
+          const m = text.match(re);
+          return m ? normalize(m[1]) : '';
+        };
+        const lines = bodyText.split('\n').map(l => normalize(l)).filter(Boolean);
+        const companyName = lines.find(l => l.includes('有限公司') || l.includes('商行') || l.includes('工厂')) || '';
+        const yearsMatch = bodyText.match(/(\d+)\s*年/);
+        const years = yearsMatch ? yearsMatch[0] : '';
+        const locationMatch = bodyText.match(/([\u4e00-\u9fa5]{2,4}(?:省|市)\s*[\u4e00-\u9fa5]{2,6}(?:市|区|县)?)/);
+        const location = locationMatch ? locationMatch[1] : '';
+        const returnRateMatch = bodyText.match(/回头率\s*([0-9.]+%)/);
+        const returnRate = returnRateMatch ? '回头率' + returnRateMatch[1] : '';
+        const responseRate = extractMetric(bodyText, '响应率') || extractMetric(bodyText, '回复率');
+        const staffSize = extractMetric(bodyText, '员工人数') || extractMetric(bodyText, '员工总数');
+        const businessModel = extractMetric(bodyText, '经营模式');
+        const mainProducts = extractMetric(bodyText, '主营产品') || extractMetric(bodyText, '主营');
+        const results = [{
+          store_name: companyName,
+          store_url: window.location.href,
+          location,
+          years_on_platform: years,
+          return_rate: returnRate,
+          response_rate: responseRate,
+          staff_size: staffSize,
+          business_model: businessModel,
+          main_products: mainProducts.slice(0, 100)
+        }];
+        return JSON.stringify(results);
+      })()
+    fields:
+      store_name:
+        json_path: "store_name"
+      location:
+        json_path: "location"
+        default: ""
+      years_on_platform:
+        json_path: "years_on_platform"
+        default: ""
+      return_rate:
+        json_path: "return_rate"
+        default: ""
+      response_rate:
+        json_path: "response_rate"
+        default: ""
+      business_model:
+        json_path: "business_model"
+        default: ""
+      main_products:
+        json_path: "main_products"
+        default: ""
+    params:
+      member_id:
+        type: string
+        required: true
+        description: "1688 店铺 member ID 或店铺域名前缀（如 b2b-22154705262941f196）"

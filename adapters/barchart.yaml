@@ -1,0 +1,213 @@
+name: barchart
+description: "Barchart — US stock quotes and options chain data"
+base_url: "https://www.barchart.com"
+version: "1.0.0"
+
+commands:
+  quote:
+    description: "Stock quote with price, volume, and key metrics"
+    url: "https://www.barchart.com/stocks/quotes/{symbol}/overview"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const sym = '{symbol}'.toUpperCase().trim();
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+
+        // Strategy 1: internal proxy API with CSRF token
+        try {
+          const fields = [
+            'symbol','symbolName','lastPrice','priceChange','percentChange',
+            'highPrice','lowPrice','openPrice','previousPrice','volume','averageVolume',
+            'marketCap','peRatio','earningsPerShare','tradeTime',
+          ].join(',');
+          const url = '/proxies/core-api/v1/quotes/get?symbol=' + encodeURIComponent(sym) + '&fields=' + fields;
+          const resp = await fetch(url, {
+            credentials: 'include',
+            headers: { 'X-CSRF-TOKEN': csrf },
+          });
+          if (resp.ok) {
+            const d = await resp.json();
+            const row = d?.data?.[0] || null;
+            if (row) {
+              const r = row.raw || row;
+              return JSON.stringify([{
+                symbol: r.symbol || sym,
+                name: r.symbolName || sym,
+                price: r.lastPrice,
+                change: r.priceChange,
+                changePct: r.percentChange,
+                open: r.openPrice,
+                high: r.highPrice,
+                low: r.lowPrice,
+                prevClose: r.previousPrice,
+                volume: r.volume,
+                avgVolume: r.averageVolume,
+                marketCap: r.marketCap,
+                peRatio: r.peRatio,
+                eps: r.earningsPerShare,
+              }]);
+            }
+          }
+        } catch(e) {}
+
+        // Strategy 2: parse from DOM
+        try {
+          const priceEl = document.querySelector('span.last-change');
+          const price = priceEl ? priceEl.textContent.trim() : null;
+          const name = document.querySelector('h1 span.symbol');
+          return JSON.stringify([{
+            symbol: sym,
+            name: name ? name.textContent.trim() : sym,
+            price: price,
+            change: null,
+            changePct: null,
+            open: null,
+            high: null,
+            low: null,
+            prevClose: null,
+            volume: null,
+            avgVolume: null,
+            marketCap: null,
+            peRatio: null,
+            eps: null,
+          }]);
+        } catch(e) {
+          return JSON.stringify([{ error: 'Could not fetch quote for ' + sym }]);
+        }
+      })()
+    fields:
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      price:
+        json_path: "price"
+      change:
+        json_path: "change"
+      changePct:
+        json_path: "changePct"
+      open:
+        json_path: "open"
+      high:
+        json_path: "high"
+      low:
+        json_path: "low"
+      prevClose:
+        json_path: "prevClose"
+      volume:
+        json_path: "volume"
+      avgVolume:
+        json_path: "avgVolume"
+      marketCap:
+        json_path: "marketCap"
+      peRatio:
+        json_path: "peRatio"
+      eps:
+        json_path: "eps"
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Stock ticker (e.g. AAPL, MSFT, TSLA)"
+
+  options:
+    description: "Options chain with greeks, IV, volume, and open interest"
+    url: "https://www.barchart.com/stocks/quotes/{symbol}/options"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const sym = '{symbol}'.toUpperCase().trim();
+        const type = '{type}';
+        const limit = {limit};
+        const csrf = document.querySelector('meta[name="csrf-token"]')?.content || '';
+        const headers = { 'X-CSRF-TOKEN': csrf };
+
+        try {
+          const fields = [
+            'strikePrice','bidPrice','askPrice','lastPrice','priceChange',
+            'volume','openInterest','volatility',
+            'delta','gamma','theta','vega',
+            'expirationDate','optionType','percentFromLast',
+          ].join(',');
+
+          const url = '/proxies/core-api/v1/options/chain?symbol=' + encodeURIComponent(sym)
+            + '&fields=' + fields + '&raw=1';
+          const resp = await fetch(url, { credentials: 'include', headers });
+          if (resp.ok) {
+            const d = await resp.json();
+            let items = d?.data || [];
+
+            items = items.filter(i => {
+              const t = (i.raw || i).optionType || '';
+              return t.toLowerCase() === type.toLowerCase();
+            });
+
+            items.sort((a, b) => {
+              const aD = Math.abs((a.raw || a).percentFromLast || 999);
+              const bD = Math.abs((b.raw || b).percentFromLast || 999);
+              return aD - bD;
+            });
+
+            return JSON.stringify(items.slice(0, limit).map(i => {
+              const r = i.raw || i;
+              return {
+                strike: r.strikePrice,
+                bid: r.bidPrice != null ? Number(Number(r.bidPrice).toFixed(2)) : null,
+                ask: r.askPrice != null ? Number(Number(r.askPrice).toFixed(2)) : null,
+                last: r.lastPrice != null ? Number(Number(r.lastPrice).toFixed(2)) : null,
+                change: r.priceChange != null ? Number(Number(r.priceChange).toFixed(2)) : null,
+                volume: r.volume,
+                openInterest: r.openInterest,
+                iv: r.volatility != null ? Number(Number(r.volatility).toFixed(2)) + '%' : null,
+                delta: r.delta != null ? Number(Number(r.delta).toFixed(4)) : null,
+                gamma: r.gamma != null ? Number(Number(r.gamma).toFixed(4)) : null,
+                theta: r.theta != null ? Number(Number(r.theta).toFixed(4)) : null,
+                vega: r.vega != null ? Number(Number(r.vega).toFixed(4)) : null,
+                expiration: r.expirationDate,
+              };
+            }));
+          }
+        } catch(e) {}
+
+        return JSON.stringify([]);
+      })()
+    fields:
+      strike:
+        json_path: "strike"
+      bid:
+        json_path: "bid"
+      ask:
+        json_path: "ask"
+      last:
+        json_path: "last"
+      change:
+        json_path: "change"
+      volume:
+        json_path: "volume"
+      openInterest:
+        json_path: "openInterest"
+      iv:
+        json_path: "iv"
+      delta:
+        json_path: "delta"
+      gamma:
+        json_path: "gamma"
+      theta:
+        json_path: "theta"
+      vega:
+        json_path: "vega"
+      expiration:
+        json_path: "expiration"
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Stock ticker (e.g. AAPL)"
+      type:
+        type: string
+        default: "Call"
+        description: "Option type: Call or Put"
+      limit:
+        type: integer
+        default: 20
+        description: "Max number of strikes to return"

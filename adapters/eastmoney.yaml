@@ -1,0 +1,66 @@
+name: eastmoney
+description: "东方财富 — 热股榜排行"
+base_url: "https://guba.eastmoney.com"
+version: "1.0.0"
+
+commands:
+  hot_rank:
+    description: "东方财富热股榜"
+    url: "https://guba.eastmoney.com/rank/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = {limit};
+
+        // Wait for content to load
+        await new Promise(r => setTimeout(r, 3000));
+
+        const cleanText = (el) => (el?.textContent || '').replace(/\s+/g, ' ').trim();
+        const rows = document.querySelectorAll('table.rank_table tbody tr');
+        const results = [];
+        const seen = new Set();
+        let rank = 0;
+
+        rows.forEach((row) => {
+          if (results.length >= limit) return;
+          const codeEl = row.querySelector('a.stock_code');
+          const href = codeEl?.getAttribute('href') || '';
+          const symbolMatch = href.match(/(\d{6})/);
+          if (!symbolMatch) return;
+          const symbol = symbolMatch[1];
+          if (seen.has(symbol)) return;
+          seen.add(symbol);
+          rank++;
+          const tds = row.querySelectorAll('td');
+          results.push({
+            rank,
+            symbol,
+            name: row.querySelector('td.nametd a[title]')?.getAttribute('title') || cleanText(row.querySelector('td.nametd')),
+            price: tds[6] ? cleanText(tds[6]) : '',
+            changePercent: tds[8] ? cleanText(tds[8]) : '',
+            heat: cleanText(row.querySelector('td.fans')),
+            url: 'https://guba.eastmoney.com/list,' + symbol + '.html',
+          });
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      price:
+        json_path: "price"
+      changePercent:
+        json_path: "changePercent"
+      heat:
+        json_path: "heat"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "返回数量"

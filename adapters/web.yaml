@@ -1,0 +1,83 @@
+name: web
+description: "通用网页阅读器 — 提取任意网页的主要内容"
+base_url: ""
+version: "1.0.0"
+
+commands:
+  read:
+    description: "读取任意网页并提取正文内容"
+    url: "{url}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const result = { title: '', author: '', publish_time: '', content: '', url: window.location.href };
+
+        // Title extraction: og:title > <title> > first <h1>
+        const ogTitle = document.querySelector('meta[property="og:title"]');
+        if (ogTitle) result.title = ogTitle.getAttribute('content')?.trim() || '';
+        if (!result.title) result.title = document.title?.trim() || '';
+        if (!result.title) {
+          const h1 = document.querySelector('h1');
+          result.title = h1?.textContent?.trim() || 'untitled';
+        }
+        result.title = result.title.replace(/\s*[|\-–—]\s*[^|\-–—]{1,30}$/, '').trim();
+
+        // Author extraction
+        const authorMeta = document.querySelector('meta[name="author"], meta[property="article:author"], meta[name="twitter:creator"]');
+        result.author = authorMeta?.getAttribute('content')?.trim() || '';
+
+        // Publish time extraction
+        const timeMeta = document.querySelector('meta[property="article:published_time"], meta[name="date"], meta[name="publishdate"], time[datetime]');
+        if (timeMeta) {
+          result.publish_time = timeMeta.getAttribute('content') || timeMeta.getAttribute('datetime') || timeMeta.textContent?.trim() || '';
+        }
+
+        // Content extraction: article > [role="main"] > main > largest text block > body
+        let contentEl = null;
+        const articles = document.querySelectorAll('article');
+        if (articles.length === 1) contentEl = articles[0];
+        else if (articles.length > 1) {
+          let maxLen = 0;
+          articles.forEach(a => { const len = a.textContent?.length || 0; if (len > maxLen) { maxLen = len; contentEl = a; } });
+        }
+        if (!contentEl) contentEl = document.querySelector('[role="main"]');
+        if (!contentEl) contentEl = document.querySelector('main');
+        if (!contentEl) {
+          const candidates = document.querySelectorAll(
+            'div[class*="content"], div[class*="article"], div[class*="post"], ' +
+            'div[class*="entry"], div[class*="body"], div[id*="content"], ' +
+            'div[id*="article"], div[id*="post"], section'
+          );
+          let maxLen = 0;
+          candidates.forEach(c => { const len = c.textContent?.length || 0; if (len > maxLen) { maxLen = len; contentEl = c; } });
+        }
+        if (!contentEl || (contentEl.textContent?.length || 0) < 200) contentEl = document.body;
+
+        // Clean up noise
+        const clone = contentEl.cloneNode(true);
+        const noise = 'nav, header, footer, aside, .sidebar, .nav, .menu, .footer, .header, .comments, .ad, .ads, .social-share, .related-posts, .newsletter, .cookie-banner, script, style, noscript, iframe';
+        clone.querySelectorAll(noise).forEach(el => el.remove());
+
+        result.content = (clone.textContent || '').replace(/\s+/g, ' ').trim().slice(0, 5000);
+
+        return JSON.stringify([result]);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      publish_time:
+        json_path: "publish_time"
+        default: ""
+      content:
+        json_path: "content"
+      url:
+        json_path: "url"
+    params:
+      url:
+        type: string
+        required: true
+        description: "任意网页URL"

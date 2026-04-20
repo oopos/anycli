@@ -1,0 +1,66 @@
+name: codex
+description: "OpenAI Codex — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check Codex Desktop connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read the current Codex conversation thread"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const turns = Array.from(document.querySelectorAll('[data-content-search-turn-key]'));
+        if (turns.length > 0) {
+          const content = turns.map(t => t.innerText || t.textContent).join('\n\n---\n\n');
+          return JSON.stringify({content: content});
+        }
+        const container = document.querySelector('[role="log"], [data-testid="conversation"], .thread-container, .messages-list, main');
+        if (container) return JSON.stringify({content: container.innerText || container.textContent});
+        return JSON.stringify({content: document.body.innerText});
+      })()
+    fields:
+      content:
+        json_path: "content"
+    params: {}
+
+  send:
+    description: "Send text/commands to the Codex AI composer"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        const editables = Array.from(document.querySelectorAll('[contenteditable="true"]'));
+        const composer = editables.length > 0 ? editables[editables.length - 1] : document.querySelector('textarea');
+        if (!composer) return JSON.stringify({status: 'error', error: 'Could not find Codex input element'});
+        composer.focus();
+        document.execCommand('insertText', false, text);
+        return JSON.stringify({status: 'injected', text: text});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Text, command (e.g. /review), or skill to send"

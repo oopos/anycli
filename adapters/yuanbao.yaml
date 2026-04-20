@@ -1,0 +1,203 @@
+name: yuanbao
+description: "Yuanbao - Tencent AI chat assistant"
+base_url: "https://yuanbao.tencent.com"
+version: "1.0.0"
+
+commands:
+  ask:
+    description: "Send a prompt and get response"
+    url: "https://yuanbao.tencent.com/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const prompt = '${{text}}';
+        const timeout = parseInt('${{timeout}}') || 60;
+
+        const isVisible = (node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const rect = node.getBoundingClientRect();
+          const style = window.getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+
+        // Check login gate
+        const hasLoginGate = () => {
+          const bodyText = document.body.innerText || '';
+          return bodyText.includes('微信扫码登录') ||
+            Array.from(document.querySelectorAll('iframe')).some(f => (f.getAttribute('src') || '').includes('open.weixin.qq.com'));
+        };
+
+        if (hasLoginGate()) return JSON.stringify({response: '[AUTH REQUIRED] Please log in to Yuanbao first'});
+
+        // Get baseline assistant messages
+        const getAssistantMessages = () => {
+          return Array.from(document.querySelectorAll('.agent-chat__list__item--ai'))
+            .filter(isVisible)
+            .map(root => {
+              const content = root.querySelector('.hyc-content-md-done') ||
+                root.querySelector('.hyc-content-md') ||
+                root.querySelector('.agent-chat__speech-text') ||
+                root.querySelector('.agent-chat__bubble__content');
+              return content ? (content.innerText || '').trim() : '';
+            })
+            .filter(Boolean);
+        };
+
+        const beforeMessages = getAssistantMessages();
+
+        // Send message
+        const composer = Array.from(document.querySelectorAll('.ql-editor[contenteditable="true"], .ql-editor, [contenteditable="true"]'))
+          .find(isVisible);
+
+        if (!composer) return JSON.stringify({response: '[ERROR] Yuanbao composer not found'});
+
+        composer.focus();
+        const selection = window.getSelection();
+        const range = document.createRange();
+        range.selectNodeContents(composer);
+        range.collapse(false);
+        selection?.removeAllRanges();
+        selection?.addRange(range);
+        composer.textContent = '';
+        document.execCommand('insertText', false, prompt);
+        composer.dispatchEvent(new InputEvent('input', {bubbles: true, data: prompt, inputType: 'insertText'}));
+
+        await new Promise(r => setTimeout(r, 300));
+
+        // Click send button
+        const submit = Array.from(document.querySelectorAll('a[class*="send-btn"], button[class*="send-btn"]'))
+          .find(node => {
+            if (!(node instanceof HTMLElement) || !isVisible(node)) return false;
+            const className = node.className || '';
+            return !className.includes('disabled');
+          });
+
+        if (submit) submit.click();
+        else {
+          composer.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+        }
+
+        // Wait for response
+        const startTime = Date.now();
+        let lastText = '';
+        let stableCount = 0;
+        const sanitize = (text) => text
+          .replace(/内容由AI生成，仅供参考/gi, '')
+          .replace(/重新回答/gi, '')
+          .trim();
+
+        while (Date.now() - startTime < timeout * 1000) {
+          await new Promise(r => setTimeout(r, 2000));
+          if (hasLoginGate()) return JSON.stringify({response: '[AUTH REQUIRED] Login gate appeared'});
+
+          const currentMessages = getAssistantMessages();
+          const freshMessages = currentMessages.slice(Math.max(0, beforeMessages.length))
+            .map(m => sanitize(m))
+            .filter(m => m && m !== prompt.trim());
+
+          let candidate = '';
+          for (let i = freshMessages.length - 1; i >= 0; i--) {
+            if (freshMessages[i] !== prompt.trim()) { candidate = freshMessages[i]; break; }
+          }
+
+          // Skip if still loading
+          if (/^(正在搜索资料|搜索资料中|正在思考|思考中)[.。…]*$/.test(candidate)) continue;
+
+          if (candidate && candidate.length > 2) {
+            if (candidate === lastText) {
+              stableCount++;
+              if (stableCount >= 3 && (Date.now() - startTime >= 8000)) {
+                return JSON.stringify({response: candidate});
+              }
+            } else {
+              lastText = candidate;
+              stableCount = 0;
+            }
+          }
+        }
+        if (lastText) return JSON.stringify({response: lastText});
+        return JSON.stringify({response: '[NO RESPONSE] No response within ' + timeout + 's'});
+      })()
+    fields:
+      response:
+        json_path: "response"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Prompt to send"
+      timeout:
+        type: string
+        required: false
+        description: "Max seconds to wait (default: 60)"
+        default: "60"
+
+  new:
+    description: "Start a new conversation"
+    url: "https://yuanbao.tencent.com/"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const rect = node.getBoundingClientRect();
+          const style = window.getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+
+        // Check login gate
+        const bodyText = document.body.innerText || '';
+        if (bodyText.includes('微信扫码登录')) {
+          return JSON.stringify({status: 'error', error: 'Login required'});
+        }
+
+        const trigger = Array.from(document.querySelectorAll('.yb-common-nav__trigger[data-desc="new-chat"]'))
+          .find(isVisible);
+
+        if (trigger) {
+          trigger.click();
+          return JSON.stringify({status: 'new conversation started'});
+        }
+
+        window.location.href = 'https://yuanbao.tencent.com/';
+        return JSON.stringify({status: 'navigated to new chat'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}
+
+  read:
+    description: "Read current conversation"
+    url: "https://yuanbao.tencent.com/"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const isVisible = (node) => {
+          if (!(node instanceof HTMLElement)) return false;
+          const rect = node.getBoundingClientRect();
+          const style = window.getComputedStyle(node);
+          return rect.width > 0 && rect.height > 0 && style.display !== 'none' && style.visibility !== 'hidden';
+        };
+
+        const messages = Array.from(document.querySelectorAll('.agent-chat__list__item--ai, .agent-chat__list__item--user'))
+          .filter(isVisible)
+          .map(root => {
+            const isUser = root.classList.contains('agent-chat__list__item--user');
+            const content = root.querySelector('.hyc-content-md-done') ||
+              root.querySelector('.hyc-content-md') ||
+              root.querySelector('.agent-chat__speech-text') ||
+              root.querySelector('.agent-chat__bubble__content');
+            const text = content ? (content.innerText || '').trim() : (root.innerText || '').trim();
+            const role = isUser ? 'User' : 'Assistant';
+            return role + ': ' + text;
+          })
+          .filter(t => t.length > 10);
+
+        if (messages.length > 0) return JSON.stringify({messages: messages.join('\n\n')});
+        return JSON.stringify({messages: 'No messages found'});
+      })()
+    fields:
+      messages:
+        json_path: "messages"
+    params: {}

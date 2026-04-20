@@ -1,0 +1,108 @@
+name: notebooklm
+description: "Google NotebookLM — 笔记本列表和登录状态检查（需要登录）"
+base_url: "https://notebooklm.google.com"
+version: "1.0.0"
+
+commands:
+  list:
+    description: "List NotebookLM notebooks in the current session"
+    url: "https://notebooklm.google.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        // Wait for page to settle
+        await new Promise(r => setTimeout(r, 3000));
+
+        // Check if logged in
+        const bodyText = document.body ? document.body.innerText : '';
+        if (/sign in/i.test(bodyText) && document.querySelectorAll('a[href*="accounts.google.com"]').length > 0) {
+          return JSON.stringify([{error: 'Login required. Please sign in to NotebookLM first.'}]);
+        }
+
+        // Try to find notebook links in the DOM
+        const links = document.querySelectorAll('a[href*="/notebook/"]');
+        if (links.length > 0) {
+          const results = [];
+          links.forEach(link => {
+            const href = link.getAttribute('href') || '';
+            const idMatch = href.match(/\/notebook\/([^/?#]+)/);
+            const id = idMatch ? idMatch[1] : '';
+            const title = link.textContent.trim() || 'Untitled';
+            results.push({
+              title: title,
+              id: id,
+              url: href.startsWith('http') ? href : 'https://notebooklm.google.com' + href
+            });
+          });
+          return JSON.stringify(results);
+        }
+
+        // Fallback: look for any notebook-like cards
+        const cards = document.querySelectorAll('[data-notebook-id], .notebook-card, [class*="notebook"]');
+        if (cards.length > 0) {
+          const results = [];
+          cards.forEach(card => {
+            const id = card.getAttribute('data-notebook-id') || '';
+            const title = card.textContent.trim().slice(0, 100) || 'Untitled';
+            results.push({ title: title, id: id, url: '' });
+          });
+          return JSON.stringify(results);
+        }
+
+        return JSON.stringify([{title: 'No notebooks found', id: '', url: ''}]);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      id:
+        json_path: "id"
+      url:
+        json_path: "url"
+
+  status:
+    description: "Check NotebookLM page availability and login state"
+    url: "https://notebooklm.google.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 2000));
+
+        const url = window.location.href;
+        const hostname = window.location.hostname;
+        const title = document.title || '';
+        const bodyText = document.body ? document.body.innerText : '';
+
+        const isNotebookLM = hostname.includes('notebooklm.google.com');
+        const loginRequired = /sign in/i.test(bodyText) && document.querySelectorAll('a[href*="accounts.google.com"]').length > 0;
+
+        const notebooks = document.querySelectorAll('a[href*="/notebook/"]');
+        const notebookCount = notebooks.length;
+
+        let kind = 'unknown';
+        if (url.includes('/notebook/')) kind = 'notebook';
+        else if (isNotebookLM) kind = 'home';
+
+        const results = [{
+          status: isNotebookLM ? 'Connected' : 'Unavailable',
+          login: loginRequired ? 'Required' : 'OK',
+          page: kind,
+          url: url,
+          title: title,
+          notebooks: String(notebookCount)
+        }];
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      status:
+        json_path: "status"
+      login:
+        json_path: "login"
+      page:
+        json_path: "page"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+      notebooks:
+        json_path: "notebooks"
