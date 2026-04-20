@@ -1,0 +1,298 @@
+name: zsxq
+description: "知识星球 — 星球话题、搜索和最新动态（需要登录）"
+base_url: "https://wx.zsxq.com"
+version: "1.0.0"
+
+commands:
+  topics:
+    description: "获取当前星球的话题列表"
+    url: "https://wx.zsxq.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const groupId = (() => {
+          const target = localStorage.getItem('target_group');
+          if (target) {
+            try {
+              const parsed = JSON.parse(target);
+              if (parsed.group_id) return String(parsed.group_id);
+            } catch {}
+          }
+          const match = location.href.match(/groups\/(\d+)/);
+          return match ? match[1] : '';
+        })();
+
+        if (!groupId) return JSON.stringify([{error: 'Cannot determine group_id. Open a group page first or pass group_id param.'}]);
+
+        const count = 20;
+        const apiUrl = 'https://api.zsxq.com/v2/groups/' + groupId + '/topics?scope=all&count=' + count;
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', apiUrl, true);
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('accept', 'application/json, text/plain, */*');
+          xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch { resolve(null); }
+          };
+          xhr.onerror = () => resolve(null);
+          xhr.send();
+        });
+
+        if (!resp || resp.succeeded === false) return JSON.stringify([]);
+
+        const data = resp.resp_data || resp;
+        const topics = data.topics || [];
+
+        const getAuthor = (t) =>
+          t.owner?.name || t.talk?.owner?.name || t.question?.owner?.name || t.answer?.owner?.name || '';
+        const getText = (t) => {
+          const title = (t.title || '').replace(/\s+/g, ' ').trim();
+          if (title) return title;
+          const text = t.talk?.text || t.question?.text || t.answer?.text || t.task?.text || '';
+          return text.replace(/\s+/g, ' ').trim().slice(0, 100);
+        };
+
+        const results = topics.map(t => ({
+          topic_id: t.topic_id || '',
+          type: t.type || '',
+          author: getAuthor(t),
+          title: getText(t),
+          comments: t.comments_count ?? 0,
+          likes: t.likes_count ?? 0,
+          time: t.create_time || '',
+          url: 'https://wx.zsxq.com/topic/' + (t.topic_id || ''),
+        }));
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      topic_id:
+        json_path: "topic_id"
+      type:
+        json_path: "type"
+      author:
+        json_path: "author"
+      title:
+        json_path: "title"
+      comments:
+        json_path: "comments"
+        default: "0"
+      likes:
+        json_path: "likes"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      group_id:
+        type: string
+        required: false
+        description: "星球 group_id（默认使用当前浏览器中打开的星球）"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of topics to return"
+
+  search:
+    description: "搜索星球内容"
+    url: "https://wx.zsxq.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const groupId = (() => {
+          const target = localStorage.getItem('target_group');
+          if (target) {
+            try {
+              const parsed = JSON.parse(target);
+              if (parsed.group_id) return String(parsed.group_id);
+            } catch {}
+          }
+          const match = location.href.match(/groups\/(\d+)/);
+          return match ? match[1] : '';
+        })();
+
+        if (!groupId) return JSON.stringify([{error: 'Cannot determine group_id. Open a group page first or pass group_id param.'}]);
+
+        const keyword = document.title; // placeholder, actual keyword passed via URL param
+        const count = 20;
+
+        // Get group name
+        let groupName = groupId;
+        try {
+          const groupsResp = await new Promise((resolve) => {
+            const xhr = new XMLHttpRequest();
+            xhr.open('GET', 'https://api.zsxq.com/v2/groups', true);
+            xhr.withCredentials = true;
+            xhr.setRequestHeader('accept', 'application/json');
+            xhr.onload = () => { try { resolve(JSON.parse(xhr.responseText)); } catch { resolve(null); } };
+            xhr.onerror = () => resolve(null);
+            xhr.send();
+          });
+          const groups = groupsResp?.resp_data?.groups || [];
+          const found = groups.find(g => String(g.group_id) === groupId);
+          if (found?.name) groupName = found.name;
+        } catch {}
+
+        const query = encodeURIComponent('{keyword}');
+        const apiUrl = 'https://api.zsxq.com/v2/search/groups/' + groupId + '/topics?keyword=' + query + '&count=' + count;
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', apiUrl, true);
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('accept', 'application/json, text/plain, */*');
+          xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch { resolve(null); }
+          };
+          xhr.onerror = () => resolve(null);
+          xhr.send();
+        });
+
+        if (!resp || resp.succeeded === false) return JSON.stringify([]);
+
+        const data = resp.resp_data || resp;
+        const topics = data.topics || data.search_result || [];
+
+        const getAuthor = (t) =>
+          t.owner?.name || t.talk?.owner?.name || t.question?.owner?.name || '';
+        const getText = (t) => {
+          const title = (t.title || '').replace(/\s+/g, ' ').trim();
+          if (title) return title;
+          const text = t.talk?.text || t.question?.text || t.answer?.text || '';
+          return text.replace(/\s+/g, ' ').trim().slice(0, 100);
+        };
+
+        const results = topics.map(t => ({
+          topic_id: t.topic_id || '',
+          group: groupName,
+          author: getAuthor(t),
+          title: getText(t),
+          comments: t.comments_count ?? 0,
+          likes: t.likes_count ?? 0,
+          time: t.create_time || '',
+          url: 'https://wx.zsxq.com/topic/' + (t.topic_id || ''),
+        }));
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      topic_id:
+        json_path: "topic_id"
+      group:
+        json_path: "group"
+      author:
+        json_path: "author"
+      title:
+        json_path: "title"
+      comments:
+        json_path: "comments"
+        default: "0"
+      likes:
+        json_path: "likes"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      keyword:
+        type: string
+        required: true
+        description: "搜索关键词"
+      group_id:
+        type: string
+        required: false
+        description: "星球 group_id（默认使用当前浏览器中打开的星球）"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  dynamics:
+    description: "获取所有星球的最新动态"
+    url: "https://wx.zsxq.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const count = 20;
+        const apiUrl = 'https://api.zsxq.com/v2/dynamics?scope=general&count=' + count;
+
+        const resp = await new Promise((resolve) => {
+          const xhr = new XMLHttpRequest();
+          xhr.open('GET', apiUrl, true);
+          xhr.withCredentials = true;
+          xhr.setRequestHeader('accept', 'application/json, text/plain, */*');
+          xhr.onload = () => {
+            try { resolve(JSON.parse(xhr.responseText)); }
+            catch { resolve(null); }
+          };
+          xhr.onerror = () => resolve(null);
+          xhr.send();
+        });
+
+        if (!resp || resp.succeeded === false) return JSON.stringify([]);
+
+        const data = resp.resp_data || resp;
+        const dynamics = data.dynamics || [];
+
+        const getAuthor = (t) =>
+          t.owner?.name || t.talk?.owner?.name || t.question?.owner?.name || '';
+        const getText = (t) => {
+          const title = (t.title || '').replace(/\s+/g, ' ').trim();
+          if (title) return title;
+          const text = t.talk?.text || t.question?.text || t.answer?.text || '';
+          return text.replace(/\s+/g, ' ').trim().slice(0, 100);
+        };
+
+        const results = dynamics.map(d => {
+          const topic = d.topic;
+          if (!topic) {
+            return {
+              time: d.create_time || '',
+              group: '',
+              author: '',
+              title: '[' + (d.action || 'unknown') + ']',
+              comments: 0,
+              likes: 0,
+              url: '',
+            };
+          }
+          return {
+            time: d.create_time || topic.create_time || '',
+            group: topic.group?.name || '',
+            author: getAuthor(topic),
+            title: getText(topic),
+            comments: topic.comments_count ?? 0,
+            likes: topic.likes_count ?? 0,
+            url: topic.topic_id ? 'https://wx.zsxq.com/topic/' + topic.topic_id : '',
+          };
+        });
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      time:
+        json_path: "time"
+      group:
+        json_path: "group"
+      author:
+        json_path: "author"
+      title:
+        json_path: "title"
+      comments:
+        json_path: "comments"
+        default: "0"
+      likes:
+        json_path: "likes"
+        default: "0"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of dynamics to return"

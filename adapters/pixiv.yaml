@@ -1,0 +1,144 @@
+name: pixiv
+description: "Pixiv — illustration rankings and search (requires login)"
+base_url: "https://www.pixiv.net"
+version: "1.0.0"
+
+commands:
+  ranking:
+    description: "Pixiv illustration rankings (daily/weekly/monthly)"
+    url: "https://www.pixiv.net"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const mode = 'daily';
+        const page = 1;
+        const limit = 20;
+        const res = await fetch(
+          'https://www.pixiv.net/ranking.php?mode=' + mode + '&p=' + page + '&format=json',
+          { credentials: 'include' }
+        );
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) return JSON.stringify([{error: 'auth-required'}]);
+          return JSON.stringify([{error: 'HTTP ' + res.status}]);
+        }
+        const data = await res.json();
+        const items = (data?.contents || []).slice(0, limit);
+        const results = items.map((item) => ({
+          rank: item.rank,
+          title: item.title,
+          author: item.user_name,
+          illust_id: String(item.illust_id),
+          pages: item.illust_page_count,
+          bookmarks: item.illust_bookmark_count,
+          url: 'https://www.pixiv.net/artworks/' + item.illust_id
+        }));
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      illust_id:
+        json_path: "illust_id"
+      pages:
+        json_path: "pages"
+      bookmarks:
+        json_path: "bookmarks"
+      url:
+        json_path: "url"
+    params:
+      mode:
+        type: string
+        default: "daily"
+        description: "Ranking mode (daily/weekly/monthly/rookie/original/male/female)"
+      page:
+        type: integer
+        default: 1
+        description: "Page number"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"
+
+  search:
+    description: "Search Pixiv illustrations by keyword"
+    url: "https://www.pixiv.net"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = '{query}';
+        const order = 'date_d';
+        const mode = 'all';
+        const page = 1;
+        const limit = 20;
+        const encoded = encodeURIComponent(query);
+        const params = new URLSearchParams({
+          word: query, order: order, mode: mode, p: String(page),
+          s_mode: 's_tag_full', type: 'illust_and_ugoira'
+        });
+        const res = await fetch(
+          'https://www.pixiv.net/ajax/search/illustrations/' + encoded + '?' + params.toString(),
+          { credentials: 'include' }
+        );
+        if (!res.ok) {
+          if (res.status === 401 || res.status === 403) return JSON.stringify([{error: 'auth-required'}]);
+          return JSON.stringify([{error: 'HTTP ' + res.status}]);
+        }
+        const body = await res.json();
+        const items = (body?.body?.illust?.data || [])
+          .filter((item) => item.id)
+          .slice(0, limit);
+        const results = items.map((item, i) => ({
+          rank: i + 1,
+          title: item.title || '',
+          author: item.userName || '',
+          illust_id: String(item.id),
+          pages: item.pageCount || 1,
+          bookmarks: item.bookmarkCount || 0,
+          tags: (item.tags || []).slice(0, 5).join(', '),
+          url: 'https://www.pixiv.net/artworks/' + item.id,
+        }));
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      illust_id:
+        json_path: "illust_id"
+      pages:
+        json_path: "pages"
+      bookmarks:
+        json_path: "bookmarks"
+      tags:
+        json_path: "tags"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword or tag"
+      order:
+        type: string
+        default: "date_d"
+        description: "Sort order (date_d/date/popular_d)"
+      mode:
+        type: string
+        default: "all"
+        description: "Search mode (all/safe/r18)"
+      page:
+        type: integer
+        default: 1
+        description: "Page number"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

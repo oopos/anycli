@@ -1,0 +1,250 @@
+name: jike
+description: "即刻 — 社交动态流、搜索、话题和用户动态"
+base_url: "https://web.okjike.com"
+version: "1.0.0"
+
+commands:
+  feed:
+    description: "即刻首页动态流（需要登录）"
+    url: "https://web.okjike.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 4000));
+        window.scrollBy(0, 1500);
+        await new Promise(r => setTimeout(r, 2000));
+
+        function getPostData(element) {
+          for (const key of Object.keys(element)) {
+            if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+              let fiber = element[key];
+              for (let i = 0; i < 10 && fiber; i++) {
+                const props = fiber.memoizedProps || fiber.pendingProps;
+                if (props && props.data && props.data.id) return props.data;
+                fiber = fiber.return;
+              }
+            }
+          }
+          return null;
+        }
+
+        const results = [];
+        const seen = new Set();
+        const elements = document.querySelectorAll('[class*="_post_"]');
+
+        for (const el of elements) {
+          const data = getPostData(el);
+          if (!data || !data.id || seen.has(data.id)) continue;
+          seen.add(data.id);
+
+          const author = data.user?.screenName || data.target?.user?.screenName || '';
+          const content = data.content || data.target?.content || '';
+          if (!author && !content) continue;
+
+          results.push({
+            author,
+            content: content.replace(/\n/g, ' ').slice(0, 120),
+            likes: data.likeCount || 0,
+            comments: data.commentCount || 0,
+            time: data.actionTime || data.createdAt || '',
+            url: 'https://web.okjike.com/originalPost/' + data.id,
+          });
+        }
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      likes:
+        json_path: "likes"
+        default: "0"
+      comments:
+        json_path: "comments"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+
+  search:
+    description: "搜索即刻帖子（需要登录）"
+    url: "https://web.okjike.com/search?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 4000));
+        window.scrollBy(0, 1500);
+        await new Promise(r => setTimeout(r, 2000));
+
+        function getPostData(element) {
+          for (const key of Object.keys(element)) {
+            if (key.startsWith('__reactFiber$') || key.startsWith('__reactInternalInstance$')) {
+              let fiber = element[key];
+              for (let i = 0; i < 10 && fiber; i++) {
+                const props = fiber.memoizedProps || fiber.pendingProps;
+                if (props && props.data && props.data.id) return props.data;
+                fiber = fiber.return;
+              }
+            }
+          }
+          return null;
+        }
+
+        const results = [];
+        const seen = new Set();
+        const elements = document.querySelectorAll('[class*="_post_"], [class*="_postItem_"]');
+
+        for (const el of elements) {
+          const data = getPostData(el);
+          if (!data || !data.id || seen.has(data.id)) continue;
+          seen.add(data.id);
+
+          const author = data.user?.screenName || data.target?.user?.screenName || '';
+          const content = data.content || data.target?.content || '';
+          if (!author && !content) continue;
+
+          results.push({
+            author,
+            content: content.replace(/\n/g, ' ').slice(0, 120),
+            likes: data.likeCount || 0,
+            comments: data.commentCount || 0,
+            time: data.actionTime || data.createdAt || '',
+            url: 'https://web.okjike.com/originalPost/' + data.id,
+          });
+        }
+
+        return JSON.stringify(results);
+      })()
+    fields:
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      likes:
+        json_path: "likes"
+        default: "0"
+      comments:
+        json_path: "comments"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  topic:
+    description: "即刻话题/圈子帖子"
+    url: "https://m.okjike.com/topics/{id}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const el = document.querySelector('script[type="application/json"]');
+          if (!el) return JSON.stringify([]);
+          const data = JSON.parse(el.textContent);
+          const pageProps = data?.props?.pageProps || {};
+          const posts = pageProps.posts || [];
+          const results = posts.map(p => ({
+            content: (p.content || '').replace(/\n/g, ' ').slice(0, 80),
+            author: p.user?.screenName || '',
+            likes: p.likeCount || 0,
+            comments: p.commentCount || 0,
+            time: p.actionTime || p.createdAt || '',
+            url: 'https://web.okjike.com/originalPost/' + (p.id || ''),
+          }));
+          return JSON.stringify(results);
+        } catch (e) {
+          return JSON.stringify([]);
+        }
+      })()
+    fields:
+      content:
+        json_path: "content"
+      author:
+        json_path: "author"
+      likes:
+        json_path: "likes"
+        default: "0"
+      comments:
+        json_path: "comments"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Topic ID (from topic URL, e.g. 553870e8e4b0cafb0a1bef68)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+
+  user:
+    description: "即刻用户动态"
+    url: "https://m.okjike.com/users/{username}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        try {
+          const el = document.querySelector('script[type="application/json"]');
+          if (!el) return JSON.stringify([]);
+          const data = JSON.parse(el.textContent);
+          const posts = data?.props?.pageProps?.posts || [];
+          const results = posts.map(p => ({
+            content: (p.content || '').replace(/\n/g, ' ').slice(0, 80),
+            type: p.type === 'ORIGINAL_POST' ? 'post' : p.type === 'REPOST' ? 'repost' : p.type || '',
+            likes: p.likeCount || 0,
+            comments: p.commentCount || 0,
+            time: p.actionTime || p.createdAt || '',
+            url: 'https://web.okjike.com/originalPost/' + (p.id || ''),
+          }));
+          return JSON.stringify(results);
+        } catch (e) {
+          return JSON.stringify([]);
+        }
+      })()
+    fields:
+      content:
+        json_path: "content"
+      type:
+        json_path: "type"
+      likes:
+        json_path: "likes"
+        default: "0"
+      comments:
+        json_path: "comments"
+        default: "0"
+      time:
+        json_path: "time"
+      url:
+        json_path: "url"
+    params:
+      username:
+        type: string
+        required: true
+        description: "Username from profile URL (e.g. wenhao1996)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"

@@ -1,0 +1,98 @@
+name: yahoo-finance
+description: "Yahoo Finance — stock quotes with real-time price data"
+base_url: "https://finance.yahoo.com"
+version: "1.0.0"
+
+commands:
+  quote:
+    description: "Get stock quote by ticker symbol (requires login cookie)"
+    url: "https://finance.yahoo.com/quote/{symbol}/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const sym = document.querySelector('meta[name="ticker"]')?.content
+          || window.location.pathname.split('/quote/')[1]?.split('/')[0]
+          || '';
+
+        // Strategy 1: v8 chart API (fetched from within page context with cookies)
+        try {
+          const chartUrl = 'https://query1.finance.yahoo.com/v8/finance/chart/' + encodeURIComponent(sym) + '?interval=1d&range=1d';
+          const resp = await fetch(chartUrl);
+          if (resp.ok) {
+            const d = await resp.json();
+            const chart = d?.chart?.result?.[0];
+            if (chart) {
+              const meta = chart.meta || {};
+              const prevClose = meta.previousClose || meta.chartPreviousClose;
+              const price = meta.regularMarketPrice;
+              const change = price != null && prevClose != null ? (price - prevClose) : null;
+              const changePct = change != null && prevClose ? ((change / prevClose) * 100) : null;
+              return JSON.stringify([{
+                symbol: meta.symbol || sym,
+                name: meta.shortName || meta.longName || sym,
+                price: price != null ? Number(price.toFixed(2)) : null,
+                change: change != null ? change.toFixed(2) : null,
+                changePercent: changePct != null ? changePct.toFixed(2) + '%' : null,
+                open: chart.indicators?.quote?.[0]?.open?.[0] || null,
+                high: meta.regularMarketDayHigh || null,
+                low: meta.regularMarketDayLow || null,
+                volume: meta.regularMarketVolume || null,
+                marketCap: null,
+                currency: meta.currency,
+                exchange: meta.exchangeName,
+              }]);
+            }
+          }
+        } catch(e) {}
+
+        // Strategy 2: Parse from page DOM
+        const titleEl = document.querySelector('title');
+        const priceEl = document.querySelector('[data-testid="qsp-price"]');
+        const changeEl = document.querySelector('[data-testid="qsp-price-change"]');
+        const changePctEl = document.querySelector('[data-testid="qsp-price-change-percent"]');
+        if (priceEl) {
+          return JSON.stringify([{
+            symbol: sym,
+            name: titleEl ? titleEl.textContent.split('(')[0].trim() : sym,
+            price: priceEl.textContent.replace(/,/g, ''),
+            change: changeEl ? changeEl.textContent : null,
+            changePercent: changePctEl ? changePctEl.textContent : null,
+            open: null, high: null, low: null, volume: null, marketCap: null,
+          }]);
+        }
+
+        return JSON.stringify([{error: 'Could not fetch quote for ' + sym}]);
+      })()
+    fields:
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      price:
+        json_path: "price"
+      change:
+        json_path: "change"
+        default: ""
+      changePercent:
+        json_path: "changePercent"
+        default: ""
+      open:
+        json_path: "open"
+        default: ""
+      high:
+        json_path: "high"
+        default: ""
+      low:
+        json_path: "low"
+        default: ""
+      volume:
+        json_path: "volume"
+        default: ""
+      marketCap:
+        json_path: "marketCap"
+        default: ""
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Stock ticker symbol (e.g. AAPL, MSFT, TSLA)"

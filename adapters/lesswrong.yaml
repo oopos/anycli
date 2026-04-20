@@ -1,0 +1,89 @@
+name: lesswrong
+description: "LessWrong — top posts, frontpage, and new posts via GraphQL API"
+base_url: "https://www.lesswrong.com"
+version: "1.0.0"
+
+commands:
+  top:
+    description: "Top all-time posts"
+    url: "https://www.lesswrong.com/graphql"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      query: "{ posts(input: {terms: {view: \"top\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
+    selector: "data.posts.results"
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "user.displayName"
+        default: "Unknown"
+      karma:
+        json_path: "baseScore"
+      comments:
+        json_path: "commentCount"
+      url:
+        template: "https://www.lesswrong.com/posts/{_id}/{slug}"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of posts to return"
+
+  frontpage:
+    description: "Algorithmic frontpage posts"
+    url: "https://www.lesswrong.com/graphql"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      query: "{ posts(input: {terms: {view: \"frontpage\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
+    selector: "data.posts.results"
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "user.displayName"
+        default: "Unknown"
+      karma:
+        json_path: "baseScore"
+      comments:
+        json_path: "commentCount"
+      url:
+        template: "https://www.lesswrong.com/posts/{_id}/{slug}"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of posts to return"
+
+  new:
+    description: "Latest posts"
+    url: "https://www.lesswrong.com/graphql"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      query: "{ posts(input: {terms: {view: \"new\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
+    selector: "data.posts.results"
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "user.displayName"
+        default: "Unknown"
+      karma:
+        json_path: "baseScore"
+      comments:
+        json_path: "commentCount"
+      url:
+        template: "https://www.lesswrong.com/posts/{_id}/{slug}"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of posts to return"

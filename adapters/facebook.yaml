@@ -1,0 +1,147 @@
+name: facebook
+description: "Facebook — news feed, search, and user profiles (requires login)"
+base_url: "https://www.facebook.com"
+version: "1.0.0"
+
+commands:
+  feed:
+    description: "Get your Facebook news feed"
+    url: "https://www.facebook.com/"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 4000));
+        const limit = {limit};
+        const posts = document.querySelectorAll('[role="article"]');
+        const results = Array.from(posts)
+          .filter(el => {
+            const text = el.textContent.trim();
+            return text.length > 30 &&
+              !text.startsWith('People you may know') &&
+              !text.startsWith('People You May Know');
+          })
+          .slice(0, limit)
+          .map((el, i) => {
+            const headerLink = el.querySelector('h2 a, h3 a, h4 a, strong a');
+            const author = headerLink ? headerLink.textContent.trim() : '';
+            const spans = Array.from(el.querySelectorAll('div[dir="auto"]'))
+              .map(s => s.textContent.trim())
+              .filter(t => t.length > 10 && t.length < 500);
+            const content = spans.length > 0 ? spans[0] : '';
+            const allText = el.textContent;
+            const likesMatch = allText.match(/([\\d,.KMk]+)\\s*(?:likes?|reactions?)/i);
+            const commentsMatch = allText.match(/([\\d,.KMk]+)\\s*comments?/i);
+            const sharesMatch = allText.match(/([\\d,.KMk]+)\\s*shares?/i);
+            return {
+              index: i + 1,
+              author: author.substring(0, 50),
+              content: content.replace(/\n/g, ' ').substring(0, 120),
+              likes: likesMatch ? likesMatch[1] : '-',
+              comments: commentsMatch ? commentsMatch[1] : '-',
+              shares: sharesMatch ? sharesMatch[1] : '-',
+            };
+          });
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "index"
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      likes:
+        json_path: "likes"
+      comments:
+        json_path: "comments"
+      shares:
+        json_path: "shares"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of posts to return"
+
+  search:
+    description: "Search Facebook for people, pages, or posts"
+    url: "https://www.facebook.com/search/top?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 4000));
+        const limit = {limit};
+        let items = document.querySelectorAll('[role="article"]');
+        if (items.length === 0) {
+          items = document.querySelectorAll('[role="listitem"]');
+        }
+        const results = Array.from(items)
+          .filter(el => el.textContent.trim().length > 20)
+          .slice(0, limit)
+          .map((el, i) => {
+            const link = el.querySelector('a[href*="facebook.com/"]');
+            const heading = el.querySelector('h2, h3, h4, strong');
+            return {
+              index: i + 1,
+              title: heading ? heading.textContent.trim().substring(0, 80) : '',
+              text: el.textContent.trim().replace(/\\s+/g, ' ').substring(0, 150),
+              url: link ? link.href.split('?')[0] : '',
+            };
+          });
+        return JSON.stringify(results);
+      })()
+    fields:
+      index:
+        json_path: "index"
+      title:
+        json_path: "title"
+      text:
+        json_path: "text"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"
+
+  profile:
+    description: "Get Facebook user/page profile info"
+    url: "https://www.facebook.com/{username}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const username = "{username}";
+        const h1 = document.querySelector('h1');
+        const name = h1 ? h1.textContent.trim() : '';
+        const links = Array.from(document.querySelectorAll('a'));
+        const friendsLink = links.find(a => a.href && a.href.includes('/friends'));
+        const followersLink = links.find(a => a.href && a.href.includes('/followers'));
+        return JSON.stringify([{
+          name: name,
+          username: username,
+          friends: friendsLink ? friendsLink.textContent.trim() : '-',
+          followers: followersLink ? followersLink.textContent.trim() : '-',
+          url: window.location.href,
+        }]);
+      })()
+    fields:
+      name:
+        json_path: "name"
+      username:
+        json_path: "username"
+      friends:
+        json_path: "friends"
+      followers:
+        json_path: "followers"
+      url:
+        json_path: "url"
+    params:
+      username:
+        type: string
+        required: true
+        description: "Facebook username or page name"

@@ -50,6 +50,23 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("jd", include_str!("../adapters/jd.yaml")),
     ("taobao", include_str!("../adapters/taobao.yaml")),
     ("kuaishou", include_str!("../adapters/kuaishou.yaml")),
+    ("twitter", include_str!("../adapters/twitter.yaml")),
+    ("instagram", include_str!("../adapters/instagram.yaml")),
+    ("tiktok", include_str!("../adapters/tiktok.yaml")),
+    ("facebook", include_str!("../adapters/facebook.yaml")),
+    ("jike", include_str!("../adapters/jike.yaml")),
+    ("hupu", include_str!("../adapters/hupu.yaml")),
+    ("zsxq", include_str!("../adapters/zsxq.yaml")),
+    ("substack", include_str!("../adapters/substack.yaml")),
+    ("apple-podcasts", include_str!("../adapters/apple-podcasts.yaml")),
+    ("yahoo-finance", include_str!("../adapters/yahoo-finance.yaml")),
+    ("reuters", include_str!("../adapters/reuters.yaml")),
+    ("xiaoyuzhou", include_str!("../adapters/xiaoyuzhou.yaml")),
+    ("xianyu", include_str!("../adapters/xianyu.yaml")),
+    ("smzdm", include_str!("../adapters/smzdm.yaml")),
+    ("pixiv", include_str!("../adapters/pixiv.yaml")),
+    ("lesswrong", include_str!("../adapters/lesswrong.yaml")),
+    ("ctrip", include_str!("../adapters/ctrip.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

@@ -1,0 +1,217 @@
+name: instagram
+description: "Instagram — explore, search, profiles (needs login)"
+base_url: "https://www.instagram.com"
+version: "1.0.0"
+
+commands:
+  explore:
+    description: "Explore/discover trending posts"
+    url: "https://www.instagram.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = {limit};
+        const res = await fetch(
+          'https://www.instagram.com/api/v1/discover/web/explore_grid/',
+          {
+            credentials: 'include',
+            headers: { 'X-IG-App-ID': '936619743392459' }
+          }
+        );
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - make sure you are logged in to Instagram');
+        const data = await res.json();
+        const posts = [];
+        for (const sec of (data?.sectional_items || [])) {
+          for (const m of (sec?.layout_content?.medias || [])) {
+            const media = m?.media;
+            if (media) posts.push({
+              user: media.user?.username || '',
+              caption: (media.caption?.text || '').replace(/\n/g, ' ').substring(0, 100),
+              likes: media.like_count ?? 0,
+              comments: media.comment_count ?? 0,
+              type: media.media_type === 1 ? 'photo' : media.media_type === 2 ? 'video' : 'carousel',
+            });
+          }
+        }
+        return JSON.stringify(posts.slice(0, limit).map((p, i) => ({ rank: i + 1, ...p })));
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      user:
+        json_path: "user"
+      caption:
+        json_path: "caption"
+      likes:
+        json_path: "likes"
+      comments:
+        json_path: "comments"
+      type:
+        json_path: "type"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+
+  search:
+    description: "Search Instagram users"
+    url: "https://www.instagram.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = "{query}";
+        const limit = {limit};
+        const res = await fetch(
+          'https://www.instagram.com/web/search/topsearch/?query=' + encodeURIComponent(query) + '&context=user',
+          {
+            credentials: 'include',
+            headers: { 'X-IG-App-ID': '936619743392459' }
+          }
+        );
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - make sure you are logged in to Instagram');
+        const data = await res.json();
+        const users = (data?.users || []).slice(0, limit);
+        return JSON.stringify(users.map((item, i) => ({
+          rank: i + 1,
+          username: item.user?.username || '',
+          name: item.user?.full_name || '',
+          verified: item.user?.is_verified ? 'Yes' : 'No',
+          private: item.user?.is_private ? 'Yes' : 'No',
+          url: 'https://www.instagram.com/' + (item.user?.username || ''),
+        })));
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      username:
+        json_path: "username"
+      name:
+        json_path: "name"
+      verified:
+        json_path: "verified"
+      private:
+        json_path: "private"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"
+
+  profile:
+    description: "Get Instagram user profile info"
+    url: "https://www.instagram.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const username = "{username}";
+        const res = await fetch(
+          'https://www.instagram.com/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username),
+          {
+            credentials: 'include',
+            headers: { 'X-IG-App-ID': '936619743392459' }
+          }
+        );
+        if (!res.ok) throw new Error('HTTP ' + res.status + ' - make sure you are logged in to Instagram');
+        const data = await res.json();
+        const u = data?.data?.user;
+        if (!u) throw new Error('User not found: ' + username);
+        return JSON.stringify([{
+          username: u.username,
+          name: u.full_name || '',
+          bio: (u.biography || '').replace(/\n/g, ' ').substring(0, 120),
+          followers: u.edge_followed_by?.count ?? 0,
+          following: u.edge_follow?.count ?? 0,
+          posts: u.edge_owner_to_timeline_media?.count ?? 0,
+          verified: u.is_verified ? 'Yes' : 'No',
+          url: 'https://www.instagram.com/' + u.username,
+        }]);
+      })()
+    fields:
+      username:
+        json_path: "username"
+      name:
+        json_path: "name"
+      bio:
+        json_path: "bio"
+      followers:
+        json_path: "followers"
+      following:
+        json_path: "following"
+      posts:
+        json_path: "posts"
+      verified:
+        json_path: "verified"
+      url:
+        json_path: "url"
+    params:
+      username:
+        type: string
+        required: true
+        description: "Instagram username"
+
+  user:
+    description: "Get recent posts from an Instagram user"
+    url: "https://www.instagram.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const username = "{username}";
+        const limit = {limit};
+        const headers = { 'X-IG-App-ID': '936619743392459' };
+        const opts = { credentials: 'include', headers };
+
+        // Get user ID first
+        const r1 = await fetch(
+          'https://www.instagram.com/api/v1/users/web_profile_info/?username=' + encodeURIComponent(username),
+          opts
+        );
+        if (!r1.ok) throw new Error('HTTP ' + r1.status + ' - make sure you are logged in to Instagram');
+        const d1 = await r1.json();
+        const userId = d1?.data?.user?.id;
+        if (!userId) throw new Error('User not found: ' + username);
+
+        // Get user feed
+        const r2 = await fetch(
+          'https://www.instagram.com/api/v1/feed/user/' + userId + '/?count=' + limit,
+          opts
+        );
+        if (!r2.ok) throw new Error('Failed to fetch user feed: HTTP ' + r2.status);
+        const d2 = await r2.json();
+        return JSON.stringify((d2?.items || []).slice(0, limit).map((p, i) => ({
+          index: i + 1,
+          caption: (p.caption?.text || '').replace(/\n/g, ' ').substring(0, 100),
+          likes: p.like_count ?? 0,
+          comments: p.comment_count ?? 0,
+          type: p.media_type === 1 ? 'photo' : p.media_type === 2 ? 'video' : 'carousel',
+          date: p.taken_at ? new Date(p.taken_at * 1000).toLocaleDateString() : '',
+        })));
+      })()
+    fields:
+      index:
+        json_path: "index"
+      caption:
+        json_path: "caption"
+      likes:
+        json_path: "likes"
+      comments:
+        json_path: "comments"
+      type:
+        json_path: "type"
+      date:
+        json_path: "date"
+    params:
+      username:
+        type: string
+        required: true
+        description: "Instagram username"
+      limit:
+        type: integer
+        default: 12
+        description: "Number of posts to return"

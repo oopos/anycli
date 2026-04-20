@@ -1,0 +1,83 @@
+name: apple-podcasts
+description: "Apple Podcasts — search podcasts, list episodes, and browse top charts via iTunes API"
+base_url: "https://itunes.apple.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search Apple Podcasts by keyword"
+    url: "https://itunes.apple.com/search?term={query}&media=podcast&limit={limit}"
+    format: json
+    selector: "results"
+    fields:
+      id:
+        json_path: "collectionId"
+      title:
+        json_path: "collectionName"
+      author:
+        json_path: "artistName"
+      episodes:
+        json_path: "trackCount"
+        default: "-"
+      genre:
+        json_path: "primaryGenreName"
+        default: "-"
+      url:
+        json_path: "collectionViewUrl"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Max results (max 25)"
+
+  episodes:
+    description: "List recent episodes of a podcast (use ID from search)"
+    url: "https://itunes.apple.com/lookup?id={id}&entity=podcastEpisode&limit={limit}"
+    format: json
+    selector: "results[?kind=='podcast-episode']"
+    fields:
+      title:
+        json_path: "trackName"
+      duration:
+        json_path: "trackTimeMillis"
+        default: "-"
+      date:
+        json_path: "releaseDate"
+        default: "-"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Podcast ID (collectionId from search output)"
+      limit:
+        type: integer
+        default: 15
+        description: "Max episodes to show (max 200)"
+
+  top:
+    description: "Top podcasts chart on Apple Podcasts"
+    url: "https://rss.marketingtools.apple.com/api/v2/{country}/podcasts/top/{limit}/podcasts.json"
+    format: json
+    selector: "feed.results"
+    fields:
+      name:
+        json_path: "name"
+      author:
+        json_path: "artistName"
+        default: ""
+      id:
+        json_path: "id"
+    params:
+      country:
+        type: string
+        default: "us"
+        description: "Country code (e.g. us, cn, gb, jp)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of podcasts (max 100)"

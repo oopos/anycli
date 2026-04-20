@@ -1,0 +1,155 @@
+name: tiktok
+description: "TikTok — explore trending videos, search, and view user profiles"
+base_url: "https://www.tiktok.com"
+version: "1.0.0"
+
+commands:
+  explore:
+    description: "Get trending TikTok videos from explore page"
+    url: "https://www.tiktok.com/explore"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        const limit = {limit};
+        const links = Array.from(document.querySelectorAll('a[href*="/video/"]'));
+        const seen = new Set();
+        const results = [];
+        for (const a of links) {
+          const href = a.href;
+          if (seen.has(href)) continue;
+          seen.add(href);
+          const match = href.match(/@([^/]+)\/video\/(\d+)/);
+          results.push({
+            rank: results.length + 1,
+            author: match ? match[1] : '',
+            views: a.textContent.trim() || '-',
+            url: href,
+          });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      author:
+        json_path: "author"
+      views:
+        json_path: "views"
+      url:
+        json_path: "url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of videos to return"
+
+  search:
+    description: "Search TikTok videos"
+    url: "https://www.tiktok.com/explore"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = "{query}";
+        const limit = {limit};
+        const res = await fetch('/api/search/general/full/?keyword=' + encodeURIComponent(query) + '&offset=0&count=' + limit + '&aid=1988', { credentials: 'include' });
+        if (!res.ok) throw new Error('Search failed: HTTP ' + res.status);
+        const data = await res.json();
+        const items = (data.data || []).filter(function(i) { return i.type === 1 && i.item; });
+        const results = items.slice(0, limit).map(function(i, idx) {
+          var v = i.item;
+          var a = v.author || {};
+          var s = v.stats || {};
+          return {
+            rank: idx + 1,
+            desc: (v.desc || '').replace(/\n/g, ' ').substring(0, 100),
+            author: a.uniqueId || '',
+            url: (a.uniqueId && v.id) ? 'https://www.tiktok.com/@' + a.uniqueId + '/video/' + v.id : '',
+            plays: s.playCount || 0,
+            likes: s.diggCount || 0,
+            comments: s.commentCount || 0,
+            shares: s.shareCount || 0,
+          };
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      desc:
+        json_path: "desc"
+      author:
+        json_path: "author"
+      url:
+        json_path: "url"
+      plays:
+        json_path: "plays"
+      likes:
+        json_path: "likes"
+      comments:
+        json_path: "comments"
+      shares:
+        json_path: "shares"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"
+
+  profile:
+    description: "Get TikTok user profile info"
+    url: "https://www.tiktok.com/explore"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const username = "{username}";
+        const res = await fetch('https://www.tiktok.com/@' + encodeURIComponent(username), { credentials: 'include' });
+        if (!res.ok) throw new Error('User not found: ' + username);
+        const html = await res.text();
+        const idx = html.indexOf('__UNIVERSAL_DATA_FOR_REHYDRATION__');
+        if (idx === -1) throw new Error('Could not parse profile data');
+        const start = html.indexOf('>', idx) + 1;
+        const end = html.indexOf('</script>', start);
+        const data = JSON.parse(html.substring(start, end));
+        const ud = data['__DEFAULT_SCOPE__'] && data['__DEFAULT_SCOPE__']['webapp.user-detail'];
+        const u = ud && ud.userInfo && ud.userInfo.user;
+        const s = ud && ud.userInfo && ud.userInfo.stats;
+        if (!u) throw new Error('User not found: ' + username);
+        return JSON.stringify([{
+          username: u.uniqueId || username,
+          name: u.nickname || '',
+          bio: (u.signature || '').replace(/\n/g, ' ').substring(0, 120),
+          followers: s && s.followerCount || 0,
+          following: s && s.followingCount || 0,
+          likes: s && s.heartCount || 0,
+          videos: s && s.videoCount || 0,
+          verified: u.verified ? 'Yes' : 'No',
+        }]);
+      })()
+    fields:
+      username:
+        json_path: "username"
+      name:
+        json_path: "name"
+      bio:
+        json_path: "bio"
+      followers:
+        json_path: "followers"
+      following:
+        json_path: "following"
+      likes:
+        json_path: "likes"
+      videos:
+        json_path: "videos"
+      verified:
+        json_path: "verified"
+    params:
+      username:
+        type: string
+        required: true
+        description: "TikTok username (without @)"

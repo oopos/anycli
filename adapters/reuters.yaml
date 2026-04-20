@@ -1,0 +1,63 @@
+name: reuters
+description: "Reuters — news search via internal API (requires login cookie)"
+base_url: "https://www.reuters.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search Reuters news articles (requires login cookie)"
+    url: "https://www.reuters.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = decodeURIComponent(new URLSearchParams(window.location.search).get('q') || '') || document.title;
+        const count = 40;
+        const apiQuery = JSON.stringify({
+          keyword: '{query}',
+          offset: 0,
+          orderby: 'display_date:desc',
+          size: count,
+          website: 'reuters'
+        });
+        const apiUrl = 'https://www.reuters.com/pf/api/v3/content/fetch/articles-by-search-v2?query=' + encodeURIComponent(apiQuery);
+        try {
+          const resp = await fetch(apiUrl, {credentials: 'include'});
+          if (resp.ok) {
+            const data = await resp.json();
+            const articles = data.result?.articles || data.articles || [];
+            if (articles.length > 0) {
+              return JSON.stringify(articles.slice(0, count).map((a, i) => ({
+                rank: i + 1,
+                title: a.title || a.headlines?.basic || '',
+                date: (a.display_date || a.published_time || '').split('T')[0],
+                section: a.taxonomy?.section?.name || '',
+                url: a.canonical_url ? 'https://www.reuters.com' + a.canonical_url : '',
+              })));
+            }
+          }
+        } catch(e) {}
+        return JSON.stringify([]);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      date:
+        json_path: "date"
+        default: ""
+      section:
+        json_path: "section"
+        default: ""
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results (max 40)"

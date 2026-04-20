@@ -1,0 +1,60 @@
+name: smzdm
+description: "什么值得买 — 搜索好价商品（需要登录）"
+base_url: "https://www.smzdm.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "什么值得买搜索好价"
+    url: "https://search.smzdm.com/?c=home&s={query}&v=b"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const limit = 20;
+        const items = document.querySelectorAll('li.feed-row-wide');
+        const results = [];
+        items.forEach((li) => {
+          if (results.length >= limit) return;
+          const titleEl = li.querySelector('h5.feed-block-title > a')
+                       || li.querySelector('h5 > a');
+          if (!titleEl) return;
+          const title = (titleEl.getAttribute('title') || titleEl.textContent || '').trim();
+          const url = titleEl.getAttribute('href') || titleEl.href || '';
+          const priceEl = li.querySelector('.z-highlight');
+          const price = priceEl ? priceEl.textContent.trim() : '';
+          let mall = '';
+          const mallEl = li.querySelector('.z-feed-foot-r .feed-block-extras span')
+                      || li.querySelector('.z-feed-foot-r span');
+          if (mallEl) mall = mallEl.textContent.trim();
+          const commentEl = li.querySelector('.feed-btn-comment');
+          const comments = commentEl ? parseInt(commentEl.textContent.trim()) || 0 : 0;
+          results.push({ rank: results.length + 1, title, price, mall, comments, url });
+        });
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+        default: ""
+      mall:
+        json_path: "mall"
+        default: ""
+      comments:
+        json_path: "comments"
+        default: "0"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "返回结果数量"

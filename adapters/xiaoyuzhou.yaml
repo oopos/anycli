@@ -1,0 +1,83 @@
+name: xiaoyuzhou
+description: "小宇宙FM — 播客详情、单集详情、播客节目列表"
+base_url: "https://api.xiaoyuzhoufm.com"
+version: "1.0.0"
+
+commands:
+  podcast:
+    description: "查看播客详情"
+    url: "/v1/podcast/get?pid={id}"
+    format: json
+    fields:
+      title:
+        json_path: "data.title"
+      author:
+        json_path: "data.author"
+      description:
+        json_path: "data.brief"
+      subscribers:
+        json_path: "data.subscriptionCount"
+      episodes:
+        json_path: "data.episodeCount"
+      updated:
+        json_path: "data.latestEpisodePubDate"
+    params:
+      id:
+        type: string
+        required: true
+        description: "播客ID (来自 xiaoyuzhoufm.com URL)"
+
+  episode:
+    description: "查看单集详情"
+    url: "/v1/episode/get?eid={id}"
+    format: json
+    fields:
+      title:
+        json_path: "data.title"
+      podcast:
+        json_path: "data.podcast.title"
+      duration:
+        json_path: "data.duration"
+      plays:
+        json_path: "data.playCount"
+      comments:
+        json_path: "data.commentCount"
+      likes:
+        json_path: "data.clapCount"
+      date:
+        json_path: "data.pubDate"
+    params:
+      id:
+        type: string
+        required: true
+        description: "单集ID (eid)"
+
+  episodes:
+    description: "列出播客的所有单集"
+    url: "/v1/podcast/listEpisode"
+    method: POST
+    format: json
+    body:
+      pid: "{id}"
+      limit: "{limit}"
+    fields:
+      eid:
+        json_path: "[].eid"
+      title:
+        json_path: "[].title"
+      duration:
+        json_path: "[].duration"
+      plays:
+        json_path: "[].playCount"
+      date:
+        json_path: "[].pubDate"
+    selector: "data"
+    params:
+      id:
+        type: string
+        required: true
+        description: "播客ID"
+      limit:
+        type: integer
+        default: 20
+        description: "返回单集数量"

@@ -1,0 +1,57 @@
+name: ctrip
+description: "携程旅行 — 目的地、景区和酒店搜索联想"
+base_url: "https://m.ctrip.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索携程目的地、景区和酒店联想结果"
+    url: "https://m.ctrip.com/restapi/soa2/21881/json/gaHotelSearchEngine"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      keyword: "{query}"
+      searchType: "D"
+      platform: "online"
+      pageID: "102001"
+      head:
+        Locale: "zh-CN"
+        LocaleController: "zh_cn"
+        Currency: "CNY"
+        PageId: "102001"
+        clientID: "anycli-ctrip-search"
+        group: "ctrip"
+        Frontend:
+          sessionID: 1
+          pvid: 1
+        HotelExtension:
+          group: "CTRIP"
+          WebpSupport: false
+    selector: "Response.searchResults"
+    fields:
+      name:
+        json_path: "displayName"
+        alt_paths: ["word", "cityName"]
+      type:
+        json_path: "displayType"
+        alt_paths: ["type"]
+        default: ""
+      score:
+        json_path: "commentScore"
+        alt_paths: ["cStar"]
+        default: ""
+      price:
+        json_path: "price"
+        alt_paths: ["minPrice"]
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词（城市或景点）"
+      limit:
+        type: integer
+        default: 15
+        description: "返回结果数量"
