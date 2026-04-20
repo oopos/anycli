@@ -1,0 +1,101 @@
+name: bluesky
+description: "Bluesky — decentralized social network"
+base_url: "https://public.api.bsky.app/xrpc"
+version: "1.0.0"
+
+commands:
+  trending:
+    description: "Trending topics on Bluesky"
+    url: "/app.bsky.unspecced.getTrendingTopics"
+    format: json
+    selector: "topics"
+    fields:
+      topic:
+        json_path: "topic"
+      link:
+        json_path: "link"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of topics to return"
+
+  search:
+    description: "Search Bluesky users"
+    url: "/app.bsky.actor.searchActors?q={query}&limit={limit}"
+    format: json
+    selector: "actors"
+    fields:
+      handle:
+        json_path: "handle"
+      displayName:
+        json_path: "displayName"
+        default: ""
+      description:
+        json_path: "description"
+        default: ""
+      followersCount:
+        json_path: "followersCount"
+        default: "0"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  profile:
+    description: "Get Bluesky user profile"
+    url: "/app.bsky.actor.getProfile?actor={handle}"
+    format: json
+    fields:
+      handle:
+        json_path: "handle"
+      displayName:
+        json_path: "displayName"
+        default: ""
+      description:
+        json_path: "description"
+        default: ""
+      followersCount:
+        json_path: "followersCount"
+      followsCount:
+        json_path: "followsCount"
+      postsCount:
+        json_path: "postsCount"
+    params:
+      handle:
+        type: string
+        required: true
+        description: "User handle (e.g. user.bsky.social)"
+
+  user:
+    description: "Get recent posts from a Bluesky user"
+    url: "/app.bsky.feed.getAuthorFeed?actor={handle}&limit={limit}"
+    format: json
+    selector: "feed"
+    fields:
+      text:
+        json_path: "post.record.text"
+        default: ""
+      author:
+        json_path: "post.author.handle"
+      likeCount:
+        json_path: "post.likeCount"
+        default: "0"
+      repostCount:
+        json_path: "post.repostCount"
+        default: "0"
+    params:
+      handle:
+        type: string
+        required: true
+        description: "User handle (e.g. user.bsky.social)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"

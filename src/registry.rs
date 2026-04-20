@@ -31,6 +31,16 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("bbc", include_str!("../adapters/bbc.yaml")),
     ("producthunt", include_str!("../adapters/producthunt.yaml")),
     ("xueqiu", include_str!("../adapters/xueqiu.yaml")),
+    ("bloomberg", include_str!("../adapters/bloomberg.yaml")),
+    ("binance", include_str!("../adapters/binance.yaml")),
+    ("sinafinance", include_str!("../adapters/sinafinance.yaml")),
+    ("bluesky", include_str!("../adapters/bluesky.yaml")),
+    ("google", include_str!("../adapters/google.yaml")),
+    ("gitee", include_str!("../adapters/gitee.yaml")),
+    ("imdb", include_str!("../adapters/imdb.yaml")),
+    ("tieba", include_str!("../adapters/tieba.yaml")),
+    ("dictionary", include_str!("../adapters/dictionary.yaml")),
+    ("weread", include_str!("../adapters/weread.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

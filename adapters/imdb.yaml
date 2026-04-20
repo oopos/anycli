@@ -1,0 +1,34 @@
+name: imdb
+description: "IMDb — movies, TV shows, and ratings"
+base_url: "https://www.imdb.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search IMDb for movies, TV shows, and people"
+    url: "https://v2.sg.media-imdb.com/suggestion/h/{query}.json"
+    format: json
+    selector: "d"
+    fields:
+      title:
+        json_path: "l"
+      year:
+        json_path: "y"
+        default: ""
+      type:
+        json_path: "qid"
+        default: ""
+      id:
+        json_path: "id"
+      stars:
+        json_path: "s"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"

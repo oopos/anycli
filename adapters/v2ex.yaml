@@ -64,3 +64,45 @@ commands:
         type: string
         required: true
         description: "Node name (e.g. python, golang, apple, jobs)"
+
+  member:
+    description: "V2EX 用户资料"
+    url: "/members/show.json?username={username}"
+    format: json
+    fields:
+      username:
+        json_path: "username"
+      bio:
+        json_path: "bio"
+        default: ""
+      website:
+        json_path: "website"
+        default: ""
+      created:
+        json_path: "created"
+    params:
+      username:
+        type: string
+        required: true
+        description: "Username"
+
+  replies:
+    description: "V2EX 主题回复列表"
+    url: "/replies/show.json?topic_id={id}"
+    format: json
+    fields:
+      content:
+        json_path: "content"
+      author:
+        json_path: "member.username"
+      created:
+        json_path: "created"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Topic ID"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of replies to return"

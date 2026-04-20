@@ -1,0 +1,112 @@
+name: binance
+description: "Binance — crypto trading pairs, prices, and market data"
+base_url: "https://api.binance.com/api/v3"
+version: "1.0.0"
+
+commands:
+  price:
+    description: "Quick price check for a trading pair"
+    url: "/ticker/price?symbol={symbol}"
+    format: json
+    fields:
+      symbol:
+        json_path: "symbol"
+      price:
+        json_path: "price"
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Trading pair (e.g. BTCUSDT, ETHUSDT)"
+
+  ticker:
+    description: "24h ticker statistics for top trading pairs"
+    url: "/ticker/24hr"
+    format: json
+    fields:
+      symbol:
+        json_path: "symbol"
+      lastPrice:
+        json_path: "lastPrice"
+      priceChangePercent:
+        json_path: "priceChangePercent"
+      volume:
+        json_path: "volume"
+      quoteVolume:
+        json_path: "quoteVolume"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of pairs to return"
+
+  top:
+    description: "Top trading pairs by 24h volume"
+    url: "/ticker/24hr"
+    format: json
+    fields:
+      symbol:
+        json_path: "symbol"
+      lastPrice:
+        json_path: "lastPrice"
+      volume:
+        json_path: "volume"
+      quoteVolume:
+        json_path: "quoteVolume"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of pairs to return"
+
+  klines:
+    description: "Candlestick/kline data for a trading pair"
+    url: "/klines?symbol={symbol}&interval={interval}&limit={limit}"
+    format: json
+    fields:
+      open:
+        json_path: "[1]"
+      high:
+        json_path: "[2]"
+      low:
+        json_path: "[3]"
+      close:
+        json_path: "[4]"
+      volume:
+        json_path: "[5]"
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Trading pair (e.g. BTCUSDT)"
+      interval:
+        type: string
+        default: "1h"
+        description: "Interval (1m, 5m, 15m, 1h, 4h, 1d, 1w)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of candles to return"
+
+  trades:
+    description: "Recent trades for a trading pair"
+    url: "/trades?symbol={symbol}&limit={limit}"
+    format: json
+    fields:
+      price:
+        json_path: "price"
+      qty:
+        json_path: "qty"
+      time:
+        json_path: "time"
+      isBuyerMaker:
+        json_path: "isBuyerMaker"
+    params:
+      symbol:
+        type: string
+        required: true
+        description: "Trading pair (e.g. BTCUSDT)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of trades to return"

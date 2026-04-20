@@ -1,0 +1,55 @@
+name: gitee
+description: "Gitee — 中国代码托管平台"
+base_url: "https://gitee.com/api/v5"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search repositories on Gitee"
+    url: "/search/repositories?q={query}&per_page={limit}&sort=stars_count"
+    format: json
+    fields:
+      name:
+        json_path: "full_name"
+      description:
+        json_path: "description"
+        default: ""
+      stars:
+        json_path: "stargazers_count"
+      language:
+        json_path: "language"
+        default: ""
+      url:
+        json_path: "html_url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  trending:
+    description: "Trending repositories on Gitee"
+    url: "/search/repositories?q=stars:>100&per_page={limit}&sort=updated_at"
+    format: json
+    fields:
+      name:
+        json_path: "full_name"
+      description:
+        json_path: "description"
+        default: ""
+      stars:
+        json_path: "stargazers_count"
+      language:
+        json_path: "language"
+        default: ""
+      url:
+        json_path: "html_url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of repositories to return"

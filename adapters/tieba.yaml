@@ -1,0 +1,23 @@
+name: tieba
+description: "百度贴吧 — 热门话题"
+base_url: "https://tieba.baidu.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "Hot topics on Tieba"
+    url: "/hottopic/browse/topicList"
+    format: browser
+    selector: 'class="topic-top-item-info".*?</div>'
+    fields:
+      title:
+        pattern: 'topic-text">([^<]+)<'
+        default: ""
+      discuss_num:
+        pattern: 'topic-num">([^<]+)<'
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 30
+        description: "Number of topics to return"

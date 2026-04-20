@@ -1,0 +1,23 @@
+name: dictionary
+description: "Free Dictionary — word definitions and synonyms"
+base_url: "https://api.dictionaryapi.dev/api/v2/entries/en"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search for word definitions"
+    url: "/{word}"
+    format: json
+    fields:
+      word:
+        json_path: "word"
+      phonetic:
+        json_path: "phonetic"
+        default: ""
+      meanings:
+        json_path: "meanings"
+    params:
+      word:
+        type: string
+        required: true
+        description: "Word to look up"

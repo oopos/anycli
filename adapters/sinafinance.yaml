@@ -1,0 +1,22 @@
+name: sinafinance
+description: "新浪财经 — 实时快讯和股票行情"
+base_url: "https://zhibo.sina.com.cn/api/zhibo"
+version: "1.0.0"
+
+commands:
+  news:
+    description: "新浪财经 7x24 小时实时快讯"
+    url: "/feed?page=1&page_size={limit}&zhibo_id=152&tag_id=0&type=0"
+    format: json
+    selector: "result.data.feed.list"
+    fields:
+      content:
+        json_path: "rich_text"
+        transform: strip_html
+      time:
+        json_path: "create_time"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of news items to return"

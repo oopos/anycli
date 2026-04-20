@@ -1,0 +1,52 @@
+name: weread
+description: "微信读书 — 书籍搜索和排行"
+base_url: "https://weread.qq.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search books on WeRead"
+    url: "/web/search/global?keyword={query}&maxIdx=0&count={limit}"
+    format: json
+    selector: "books"
+    fields:
+      title:
+        json_path: "bookInfo.title"
+      author:
+        json_path: "bookInfo.author"
+        default: ""
+      rating:
+        json_path: "bookInfo.newRating"
+        default: "0"
+      category:
+        json_path: "bookInfo.category"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  ranking:
+    description: "WeRead book rankings"
+    url: "/web/bookListInCategory/rising?rank=1&count={limit}"
+    format: json
+    selector: "books"
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      rating:
+        json_path: "newRating"
+        default: "0"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of books to return"
