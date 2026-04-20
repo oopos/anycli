@@ -1,12 +1,8 @@
-//! Browser fetcher trait and default agent-browser CLI implementation.
+//! Browser fetcher trait and implementations (rsclaw browser + agent-browser CLI).
 
 use anyhow::{Context, Result, bail};
 
 /// Trait for fetching rendered HTML from a URL using a browser engine.
-///
-/// Implementations can use CDP, Playwright, agent-browser CLI, etc.
-/// This allows `rsclaw` to inject its own CDP-based fetcher while
-/// standalone `anycli` uses the `agent-browser` CLI.
 #[async_trait::async_trait]
 pub trait BrowserFetcher: Send + Sync {
     /// Navigate to the URL and return the fully rendered HTML.
@@ -22,185 +18,259 @@ pub trait BrowserFetcher: Send + Sync {
     async fn intercept(&self, url: &str, pattern: &str) -> Result<String>;
 }
 
-/// Default implementation that shells out to `agent-browser` CLI.
-///
-/// Requires `agent-browser` to be installed (`npm install -g agent-browser`).
+/// Auto-detecting browser fetcher. Prefers rsclaw, falls back to agent-browser.
 pub struct AgentBrowserFetcher {
-    /// Chrome profile to use (e.g., "Default" to reuse login state).
-    profile: Option<String>,
+    backend: BrowserBackend,
+}
+
+enum BrowserBackend {
+    Rsclaw,
+    AgentBrowser { profile: Option<String> },
 }
 
 impl AgentBrowserFetcher {
-    /// Create with default Chrome profile (reuses user's login state).
+    /// Create with auto-detection: rsclaw preferred, then agent-browser.
     pub fn new() -> Self {
-        Self {
-            profile: Some("Default".to_owned()),
+        if Self::rsclaw_available() {
+            Self { backend: BrowserBackend::Rsclaw }
+        } else {
+            Self {
+                backend: BrowserBackend::AgentBrowser {
+                    profile: Some("Default".to_owned()),
+                },
+            }
         }
     }
 
     /// Create without a Chrome profile (fresh session).
     pub fn headless() -> Self {
-        Self { profile: None }
-    }
-
-    /// Create with a specific Chrome profile name.
-    pub fn with_profile(profile: impl Into<String>) -> Self {
-        Self {
-            profile: Some(profile.into()),
+        if Self::rsclaw_available() {
+            Self { backend: BrowserBackend::Rsclaw }
+        } else {
+            Self {
+                backend: BrowserBackend::AgentBrowser { profile: None },
+            }
         }
     }
 
-    /// Check if agent-browser is available on PATH.
-    pub fn is_available() -> bool {
-        std::process::Command::new("agent-browser")
-            .arg("--version")
+    /// Create with a specific Chrome profile name (agent-browser only).
+    pub fn with_profile(profile: impl Into<String>) -> Self {
+        Self {
+            backend: BrowserBackend::AgentBrowser {
+                profile: Some(profile.into()),
+            },
+        }
+    }
+
+    /// Check if rsclaw browser is available.
+    fn rsclaw_available() -> bool {
+        std::process::Command::new("rsclaw")
+            .args(["browser", "url"])
             .stdout(std::process::Stdio::null())
             .stderr(std::process::Stdio::null())
             .status()
             .map(|s| s.success())
             .unwrap_or(false)
     }
+
+    /// Check if agent-browser is available on PATH.
+    pub fn is_available() -> bool {
+        Self::rsclaw_available()
+            || std::process::Command::new("agent-browser")
+                .arg("--version")
+                .stdout(std::process::Stdio::null())
+                .stderr(std::process::Stdio::null())
+                .status()
+                .map(|s| s.success())
+                .unwrap_or(false)
+    }
 }
 
 #[async_trait::async_trait]
 impl BrowserFetcher for AgentBrowserFetcher {
     async fn fetch(&self, url: &str) -> Result<String> {
-        if !Self::is_available() {
-            bail!(
-                "agent-browser is not installed.\n\
-                 Install it with: npm install -g agent-browser\n\
-                 This adapter requires a browser to render JavaScript."
-            );
+        match &self.backend {
+            BrowserBackend::Rsclaw => rsclaw_fetch(url).await,
+            BrowserBackend::AgentBrowser { profile } => agent_browser_fetch(url, profile.as_deref()).await,
         }
-
-        // Build command: open URL then get rendered HTML
-        let mut cmd = tokio::process::Command::new("agent-browser");
-
-        // Use Chrome profile to reuse login state
-        if let Some(ref profile) = self.profile {
-            cmd.args(["--profile", profile]);
-        }
-
-        cmd.args(["open", url]);
-        let open_output = cmd.output().await.context("failed to run agent-browser open")?;
-
-        if !open_output.status.success() {
-            let stderr = String::from_utf8_lossy(&open_output.stderr);
-            bail!("agent-browser open failed: {stderr}");
-        }
-
-        // Wait briefly for JS rendering to complete
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        // Get the rendered HTML from <body>
-        let mut get_cmd = tokio::process::Command::new("agent-browser");
-        get_cmd.args(["get", "html", "body"]);
-
-        let output = get_cmd.output().await.context("failed to run agent-browser get html")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("agent-browser get html failed: {stderr}");
-        }
-
-        String::from_utf8(output.stdout)
-            .context("agent-browser output is not valid UTF-8")
     }
 
     async fn eval(&self, url: &str, js: &str) -> Result<String> {
-        if !Self::is_available() {
-            bail!(
-                "agent-browser is not installed.\n\
-                 Install it with: npm install -g agent-browser\n\
-                 This adapter requires a browser to execute JavaScript."
-            );
+        match &self.backend {
+            BrowserBackend::Rsclaw => rsclaw_eval(url, js).await,
+            BrowserBackend::AgentBrowser { profile } => agent_browser_eval(url, js, profile.as_deref()).await,
         }
-
-        // Navigate to URL first (for cookies)
-        let mut cmd = tokio::process::Command::new("agent-browser");
-        if let Some(ref profile) = self.profile {
-            cmd.args(["--profile", profile]);
-        }
-        cmd.args(["open", url]);
-        let open_output = cmd.output().await.context("failed to run agent-browser open")?;
-        if !open_output.status.success() {
-            let stderr = String::from_utf8_lossy(&open_output.stderr);
-            bail!("agent-browser open failed: {stderr}");
-        }
-
-        // Wait for page to load
-        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
-
-        // Evaluate JS
-        let mut eval_cmd = tokio::process::Command::new("agent-browser");
-        eval_cmd.args(["eval", js]);
-        let output = eval_cmd.output().await.context("failed to run agent-browser eval")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("agent-browser eval failed: {stderr}");
-        }
-
-        String::from_utf8(output.stdout)
-            .context("agent-browser eval output is not valid UTF-8")
     }
 
     async fn desktop_eval(&self, target: &str, js: &str) -> Result<String> {
-        if !Self::is_available() {
-            bail!("agent-browser is not installed.");
-        }
-
-        // Connect to desktop app via CDP
-        // target can be a port number or --auto-connect for discovery
-        let mut connect_cmd = tokio::process::Command::new("agent-browser");
+        // Desktop eval only supported via agent-browser --cdp/--auto-connect
+        let mut cmd = tokio::process::Command::new("agent-browser");
         if target.chars().all(|c| c.is_ascii_digit()) {
-            connect_cmd.args(["--cdp", target]);
+            cmd.args(["--cdp", target]);
         } else {
-            // Use auto-connect for app name discovery
-            connect_cmd.arg("--auto-connect");
+            cmd.arg("--auto-connect");
         }
-        connect_cmd.args(["eval", js]);
+        cmd.args(["eval", js]);
 
-        let output = connect_cmd.output().await
-            .context("failed to run agent-browser for desktop eval")?;
-
+        let output = cmd.output().await.context("failed to run desktop eval")?;
         if !output.status.success() {
             let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("agent-browser desktop eval failed: {stderr}");
+            bail!("desktop eval failed: {stderr}");
         }
-
-        String::from_utf8(output.stdout)
-            .context("agent-browser output is not valid UTF-8")
+        String::from_utf8(output.stdout).context("output is not valid UTF-8")
     }
 
     async fn intercept(&self, url: &str, pattern: &str) -> Result<String> {
-        if !Self::is_available() {
-            bail!("agent-browser is not installed.");
+        match &self.backend {
+            BrowserBackend::Rsclaw => rsclaw_intercept(url, pattern).await,
+            BrowserBackend::AgentBrowser { profile } => agent_browser_intercept(url, pattern, profile.as_deref()).await,
         }
-
-        // Start network capture, navigate, then extract matching response
-        let mut cmd = tokio::process::Command::new("agent-browser");
-        if let Some(ref profile) = self.profile {
-            cmd.args(["--profile", profile]);
-        }
-        cmd.args(["open", url]);
-        cmd.output().await.context("failed to open page")?;
-
-        // Wait for network requests
-        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
-
-        // Get captured requests matching pattern
-        let mut req_cmd = tokio::process::Command::new("agent-browser");
-        req_cmd.args(["network", "requests", "--filter", pattern]);
-        let output = req_cmd.output().await
-            .context("failed to get network requests")?;
-
-        if !output.status.success() {
-            let stderr = String::from_utf8_lossy(&output.stderr);
-            bail!("agent-browser network intercept failed: {stderr}");
-        }
-
-        String::from_utf8(output.stdout)
-            .context("agent-browser output is not valid UTF-8")
     }
+}
+
+// ─── rsclaw browser backend ───────────────────────────────────────────────────
+
+async fn rsclaw_fetch(url: &str) -> Result<String> {
+    let output = tokio::process::Command::new("rsclaw")
+        .args(["browser", "open", url])
+        .output()
+        .await
+        .context("failed to run rsclaw browser open")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("rsclaw browser open failed: {stderr}");
+    }
+
+    // Wait for rendering
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let content = tokio::process::Command::new("rsclaw")
+        .args(["browser", "content"])
+        .output()
+        .await
+        .context("failed to run rsclaw browser content")?;
+
+    if !content.status.success() {
+        let stderr = String::from_utf8_lossy(&content.stderr);
+        bail!("rsclaw browser content failed: {stderr}");
+    }
+
+    String::from_utf8(content.stdout).context("output is not valid UTF-8")
+}
+
+async fn rsclaw_eval(url: &str, js: &str) -> Result<String> {
+    let output = tokio::process::Command::new("rsclaw")
+        .args(["browser", "open", url])
+        .output()
+        .await
+        .context("failed to run rsclaw browser open")?;
+
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("rsclaw browser open failed: {stderr}");
+    }
+
+    // Wait for page load
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let eval_output = tokio::process::Command::new("rsclaw")
+        .args(["browser", "evaluate", js])
+        .output()
+        .await
+        .context("failed to run rsclaw browser evaluate")?;
+
+    if !eval_output.status.success() {
+        let stderr = String::from_utf8_lossy(&eval_output.stderr);
+        bail!("rsclaw browser evaluate failed: {stderr}");
+    }
+
+    String::from_utf8(eval_output.stdout).context("output is not valid UTF-8")
+}
+
+async fn rsclaw_intercept(url: &str, _pattern: &str) -> Result<String> {
+    // rsclaw doesn't have network interception yet; fall back to eval
+    rsclaw_fetch(url).await
+}
+
+// ─── agent-browser backend ────────────────────────────────────────────────────
+
+async fn agent_browser_fetch(url: &str, profile: Option<&str>) -> Result<String> {
+    let mut cmd = tokio::process::Command::new("agent-browser");
+    if let Some(p) = profile {
+        cmd.args(["--profile", p]);
+    }
+    cmd.args(["open", url]);
+    let output = cmd.output().await.context("failed to run agent-browser open")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("agent-browser open failed: {stderr}");
+    }
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let get_output = tokio::process::Command::new("agent-browser")
+        .args(["get", "html", "body"])
+        .output()
+        .await
+        .context("failed to run agent-browser get html")?;
+
+    if !get_output.status.success() {
+        let stderr = String::from_utf8_lossy(&get_output.stderr);
+        bail!("agent-browser get html failed: {stderr}");
+    }
+
+    String::from_utf8(get_output.stdout).context("output is not valid UTF-8")
+}
+
+async fn agent_browser_eval(url: &str, js: &str, profile: Option<&str>) -> Result<String> {
+    let mut cmd = tokio::process::Command::new("agent-browser");
+    if let Some(p) = profile {
+        cmd.args(["--profile", p]);
+    }
+    cmd.args(["open", url]);
+    let output = cmd.output().await.context("failed to run agent-browser open")?;
+    if !output.status.success() {
+        let stderr = String::from_utf8_lossy(&output.stderr);
+        bail!("agent-browser open failed: {stderr}");
+    }
+
+    tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+    let eval_output = tokio::process::Command::new("agent-browser")
+        .args(["eval", js])
+        .output()
+        .await
+        .context("failed to run agent-browser eval")?;
+
+    if !eval_output.status.success() {
+        let stderr = String::from_utf8_lossy(&eval_output.stderr);
+        bail!("agent-browser eval failed: {stderr}");
+    }
+
+    String::from_utf8(eval_output.stdout).context("output is not valid UTF-8")
+}
+
+async fn agent_browser_intercept(url: &str, pattern: &str, profile: Option<&str>) -> Result<String> {
+    let mut cmd = tokio::process::Command::new("agent-browser");
+    if let Some(p) = profile {
+        cmd.args(["--profile", p]);
+    }
+    cmd.args(["open", url]);
+    cmd.output().await.context("failed to open page")?;
+
+    tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+    let req_output = tokio::process::Command::new("agent-browser")
+        .args(["network", "requests", "--filter", pattern])
+        .output()
+        .await
+        .context("failed to get network requests")?;
+
+    if !req_output.status.success() {
+        let stderr = String::from_utf8_lossy(&req_output.stderr);
+        bail!("agent-browser network intercept failed: {stderr}");
+    }
+
+    String::from_utf8(req_output.stdout).context("output is not valid UTF-8")
 }
