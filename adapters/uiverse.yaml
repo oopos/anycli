@@ -1,0 +1,83 @@
+name: uiverse
+description: "Uiverse — 开源 UI 组件库，导出 HTML/CSS/React/Vue 代码"
+base_url: "https://uiverse.io"
+version: "1.0.0"
+
+commands:
+  code:
+    description: "Export Uiverse component code (HTML or CSS)"
+    url: "{input}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        // Parse component input (URL or author/slug)
+        let componentUrl = '{input}';
+        if (!componentUrl.startsWith('http')) {
+          componentUrl = 'https://uiverse.io/' + componentUrl.replace(/^\/+/, '');
+        }
+
+        // Get post details from Remix loader data
+        const key = 'routes/$username.$friendlyId';
+        const loaderData = window.__remixContext?.state?.loaderData || {};
+        let routeData = loaderData[key];
+
+        if (!routeData?.post?.id) {
+          const dataUrl = componentUrl + '?_data=' + encodeURIComponent(key);
+          const res = await fetch(dataUrl, { credentials: 'include', headers: { accept: 'application/json' } });
+          routeData = await res.json();
+        }
+
+        if (!routeData?.post?.id) {
+          return JSON.stringify([{ target: '{target}', error: 'Could not resolve post', code: '' }]);
+        }
+
+        const post = routeData.post;
+        const username = routeData.username || componentUrl.split('/').slice(-2, -1)[0] || '';
+        const slug = routeData.slug || componentUrl.split('/').pop() || '';
+        const target = '{target}'.toLowerCase();
+
+        // Fetch raw code for HTML/CSS
+        const codeDataKey = 'routes/resource.post.code.$id';
+        const codeUrl = 'https://uiverse.io/resource/post/code/' + post.id + '?v=1&_data=' + encodeURIComponent(codeDataKey);
+        const codeRes = await fetch(codeUrl, { credentials: 'include', headers: { accept: 'application/json' } });
+        const payload = await codeRes.json();
+
+        let code = '';
+        if (target === 'html') code = payload?.html || '';
+        else if (target === 'css') code = payload?.css || '';
+        else code = 'Use html or css target for raw code export';
+
+        let language = target;
+        if (target === 'html' && post.isTailwind) language = 'html+tailwind';
+
+        return JSON.stringify([{
+          target,
+          username,
+          slug,
+          language,
+          length: code.length,
+          code: code.slice(0, 2000),
+        }]);
+      })()
+    fields:
+      target:
+        json_path: "target"
+      username:
+        json_path: "username"
+      slug:
+        json_path: "slug"
+      language:
+        json_path: "language"
+      length:
+        json_path: "length"
+      code:
+        json_path: "code"
+    params:
+      input:
+        type: string
+        required: true
+        description: "Uiverse URL or author/slug identifier"
+      target:
+        type: string
+        required: true
+        description: "Code target: html, css"

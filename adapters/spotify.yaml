@@ -1,0 +1,52 @@
+name: spotify
+description: "Spotify — 搜索、播放控制（需要 OAuth 认证，设置 SPOTIFY_CLIENT_ID 和 SPOTIFY_CLIENT_SECRET）"
+base_url: "https://api.spotify.com/v1"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search for tracks"
+    url: "/search?q={query}&type=track&limit={limit}"
+    format: json
+    selector: "tracks.items"
+    fields:
+      track:
+        json_path: "name"
+      artist:
+        json_path: "artists[0].name"
+      album:
+        json_path: "album.name"
+      uri:
+        json_path: "uri"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results (max 50)"
+    headers:
+      Authorization: "Bearer {access_token}"
+
+  status:
+    description: "Show current playback status"
+    url: "/me/player"
+    format: json
+    fields:
+      track:
+        json_path: "item.name"
+        default: "Nothing playing"
+      artist:
+        json_path: "item.artists[0].name"
+        default: ""
+      album:
+        json_path: "item.album.name"
+        default: ""
+      is_playing:
+        json_path: "is_playing"
+        default: "false"
+    params: {}
+    headers:
+      Authorization: "Bearer {access_token}"

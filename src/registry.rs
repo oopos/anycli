@@ -97,6 +97,12 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("sinablog", include_str!("../adapters/sinablog.yaml")),
     ("band", include_str!("../adapters/band.yaml")),
     ("ke", include_str!("../adapters/ke.yaml")),
+    ("jianyu", include_str!("../adapters/jianyu.yaml")),
+    ("jimeng", include_str!("../adapters/jimeng.yaml")),
+    ("nowcoder", include_str!("../adapters/nowcoder.yaml")),
+    ("spotify", include_str!("../adapters/spotify.yaml")),
+    ("uiverse", include_str!("../adapters/uiverse.yaml")),
+    ("web", include_str!("../adapters/web.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

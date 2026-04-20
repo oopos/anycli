@@ -1,0 +1,100 @@
+name: nowcoder
+description: "牛客网 — 热搜、趋势和搜索"
+base_url: "https://gw-c.nowcoder.com/api/sparta"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "热搜排行"
+    url: "/hot-search/hot-content"
+    format: json
+    selector: "data.hotQuery"
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "query"
+      heat:
+        json_path: "hotValue"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of items"
+
+  trending:
+    description: "热门帖子"
+    url: "/hot-search/top-hot-pc"
+    format: json
+    selector: "data.result"
+    fields:
+      title:
+        json_path: "title"
+      heat:
+        json_path: "hotValueFromDolphin"
+        default: ""
+      id:
+        json_path: "uuid"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of items"
+
+  search:
+    description: "全文搜索"
+    url: "https://www.nowcoder.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const query = '{query}';
+        const type = '{type}';
+        const limit = 10;
+        const strip = (html) => (html || '').replace(/<[^>]+>/g, '').replace(/&amp;/g, '&').replace(/&lt;/g, '<').replace(/&gt;/g, '>').replace(/&nbsp;/g, ' ').trim();
+        const r = await fetch('https://gw-c.nowcoder.com/api/sparta/pc/search', {
+          method: 'POST',
+          credentials: 'include',
+          headers: {'Content-Type': 'application/json'},
+          body: JSON.stringify({query, type, page: 1, pageSize: limit})
+        });
+        const d = await r.json();
+        if (!d.success) return JSON.stringify([{rank: 1, title: 'Error: ' + (d.msg || 'search failed'), author: '', content: '', id: ''}]);
+        return JSON.stringify((d.data?.records || []).map((item, i) => {
+          const data = item.data || {};
+          const moment = data.momentData || {};
+          const contentData = data.contentData || {};
+          const user = data.userBrief || {};
+          return {
+            rank: i + 1,
+            title: moment.title || contentData.title || user.nickname || '',
+            author: user.nickname || '',
+            content: strip(moment.content || contentData.content || '').slice(0, 150),
+            id: moment.uuid || contentData.uuid || data.contentId || '',
+          };
+        }).filter(r => r.title));
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      content:
+        json_path: "content"
+      id:
+        json_path: "id"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      type:
+        type: string
+        default: "all"
+        description: "Search type: all, post, question, user, job"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"
