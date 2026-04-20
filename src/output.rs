@@ -52,7 +52,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
     }
 
     let keys = collect_keys(result);
-    let mut widths: Vec<usize> = keys.iter().map(|k| k.len()).collect();
+    let mut widths: Vec<usize> = keys.iter().map(|k| display_width(k)).collect();
 
     // Collect cell values and compute column widths.
     let mut rows: Vec<Vec<String>> = Vec::with_capacity(result.items.len());
@@ -60,8 +60,9 @@ fn format_table(result: &PipelineResult) -> Result<String> {
         let mut row = Vec::with_capacity(keys.len());
         for (i, key) in keys.iter().enumerate() {
             let val = cell_value(item, key);
-            if val.len() > widths[i] {
-                widths[i] = val.len().min(60);
+            let w = display_width(&val).min(60);
+            if w > widths[i] {
+                widths[i] = w;
             }
             row.push(val);
         }
@@ -70,28 +71,51 @@ fn format_table(result: &PipelineResult) -> Result<String> {
 
     let mut out = String::new();
 
-    // Header.
-    for (i, key) in keys.iter().enumerate() {
-        if i > 0 { out.push_str(" | "); }
-        out.push_str(&pad(key, widths[i]));
-    }
-    out.push('\n');
-
-    // Separator.
+    // Top border: ┌────┬────┐
+    out.push_str("┌");
     for (i, w) in widths.iter().enumerate() {
-        if i > 0 { out.push_str("-+-"); }
-        out.push_str(&"-".repeat(*w));
+        if i > 0 { out.push_str("┬"); }
+        out.push_str(&"─".repeat(w + 2));
     }
-    out.push('\n');
+    out.push_str("┐\n");
 
-    // Rows.
-    for row in &rows {
-        for (i, val) in row.iter().enumerate() {
-            if i > 0 { out.push_str(" | "); }
-            out.push_str(&pad(&truncate(val, widths[i]), widths[i]));
-        }
-        out.push('\n');
+    // Header: │ col │ col │
+    out.push_str("│");
+    for (i, key) in keys.iter().enumerate() {
+        if i > 0 { out.push_str("│"); }
+        out.push(' ');
+        out.push_str(&pad_display(key, widths[i]));
+        out.push(' ');
     }
+    out.push_str("│\n");
+
+    // Header separator: ├────┼────┤
+    out.push_str("├");
+    for (i, w) in widths.iter().enumerate() {
+        if i > 0 { out.push_str("┼"); }
+        out.push_str(&"─".repeat(w + 2));
+    }
+    out.push_str("┤\n");
+
+    // Rows: │ val │ val │
+    for row in &rows {
+        out.push_str("│");
+        for (i, val) in row.iter().enumerate() {
+            if i > 0 { out.push_str("│"); }
+            out.push(' ');
+            out.push_str(&pad_display(&truncate(val, widths[i]), widths[i]));
+            out.push(' ');
+        }
+        out.push_str("│\n");
+    }
+
+    // Bottom border: └────┴────┘
+    out.push_str("└");
+    for (i, w) in widths.iter().enumerate() {
+        if i > 0 { out.push_str("┴"); }
+        out.push_str(&"─".repeat(w + 2));
+    }
+    out.push_str("┘\n");
 
     Ok(out)
 }
@@ -174,12 +198,36 @@ fn cell_value(item: &serde_json::Value, key: &str) -> String {
     }
 }
 
-fn pad(s: &str, width: usize) -> String {
-    let char_len = s.chars().count();
-    if char_len >= width {
-        s.chars().take(width).collect()
+/// Calculate display width accounting for CJK wide characters.
+fn display_width(s: &str) -> usize {
+    s.chars().map(|c| if is_wide_char(c) { 2 } else { 1 }).sum()
+}
+
+/// Check if a character is CJK (takes 2 columns in terminal).
+fn is_wide_char(c: char) -> bool {
+    matches!(c,
+        '\u{1100}'..='\u{115F}' |  // Hangul Jamo
+        '\u{2E80}'..='\u{303E}' |  // CJK Radicals, Kangxi, CJK Symbols
+        '\u{3040}'..='\u{33BF}' |  // Hiragana, Katakana, CJK Compat
+        '\u{3400}'..='\u{4DBF}' |  // CJK Unified Ext A
+        '\u{4E00}'..='\u{9FFF}' |  // CJK Unified
+        '\u{A000}'..='\u{A4CF}' |  // Yi
+        '\u{AC00}'..='\u{D7AF}' |  // Hangul Syllables
+        '\u{F900}'..='\u{FAFF}' |  // CJK Compat Ideographs
+        '\u{FE30}'..='\u{FE4F}' |  // CJK Compat Forms
+        '\u{FF01}'..='\u{FF60}' |  // Fullwidth Forms
+        '\u{FFE0}'..='\u{FFE6}' |  // Fullwidth Sign
+        '\u{20000}'..='\u{2FA1F}'  // CJK Ext B-F, Compat Supplement
+    )
+}
+
+/// Pad string to target display width, accounting for CJK wide chars.
+fn pad_display(s: &str, target_width: usize) -> String {
+    let w = display_width(s);
+    if w >= target_width {
+        s.to_owned()
     } else {
-        format!("{s}{}", " ".repeat(width - char_len))
+        format!("{s}{}", " ".repeat(target_width - w))
     }
 }
 
