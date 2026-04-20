@@ -1,0 +1,80 @@
+name: jd
+description: "京东 — 商品搜索和详情（需要登录）"
+base_url: "https://www.jd.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "京东商品搜索"
+    url: "https://search.jd.com/Search?keyword={query}&enc=utf-8"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const items = document.querySelectorAll('div[data-sku]');
+        const results = [];
+        for (const el of items) {
+          const sku = el.getAttribute('data-sku') || '';
+          if (!sku) continue;
+          const titleEl = el.querySelector('.p-name a em, .p-name a');
+          const title = titleEl ? normalize(titleEl.textContent) : '';
+          if (!title || title.length < 4) continue;
+          const priceEl = el.querySelector('.p-price i, .p-price strong i');
+          const price = priceEl ? '¥' + normalize(priceEl.textContent) : '';
+          const shopEl = el.querySelector('.p-shop a, .p-shopnum a');
+          const shop = shopEl ? normalize(shopEl.textContent) : '';
+          results.push({title: title.slice(0, 80), price, shop, sku, url: 'https://item.jd.com/' + sku + '.html'});
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      shop:
+        json_path: "shop"
+        default: ""
+      sku:
+        json_path: "sku"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量"
+
+  detail:
+    description: "京东商品详情"
+    url: "https://item.jd.com/{sku}.html"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const title = document.querySelector('.sku-name, .itemInfo-wrap .sku-name')?.textContent?.trim() || '';
+        const price = document.querySelector('.p-price .price, .summary-price .price')?.textContent?.trim() || '';
+        const shop = document.querySelector('.shopName a, .shop-name a')?.textContent?.trim() || '';
+        return JSON.stringify({title, price: '¥' + price, shop});
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      shop:
+        json_path: "shop"
+        default: ""
+    params:
+      sku:
+        type: string
+        required: true
+        description: "商品 SKU ID"

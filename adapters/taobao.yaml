@@ -1,0 +1,62 @@
+name: taobao
+description: "淘宝 — 商品搜索（需要登录）"
+base_url: "https://www.taobao.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "淘宝商品搜索"
+    url: "https://s.taobao.com/search?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 8000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 3000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        const cards = document.querySelectorAll('[class*="doubleCard--"], [class*="Card--"]');
+        const results = [];
+        const seenTitles = new Set();
+        for (const card of cards) {
+          const titleEl = card.querySelector('[class*="title--"]');
+          const title = titleEl ? normalize(titleEl.textContent) : '';
+          if (!title || title.length < 3 || seenTitles.has(title)) continue;
+          seenTitles.add(title);
+          const intEl = card.querySelector('[class*="priceInt--"]');
+          const floatEl = card.querySelector('[class*="priceFloat--"]');
+          let price = '';
+          if (intEl) price = '¥' + normalize(intEl.textContent) + (floatEl ? normalize(floatEl.textContent) : '');
+          const salesEl = card.querySelector('[class*="realSales--"]');
+          const sales = salesEl ? normalize(salesEl.textContent) : '';
+          const shopEl = card.querySelector('[class*="shopName--"]');
+          const shop = shopEl ? normalize(shopEl.textContent) : '';
+          const link = card.querySelector('a')?.href || '';
+          results.push({title: title.slice(0, 80), price, sales, shop, url: link});
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      sales:
+        json_path: "sales"
+        default: ""
+      shop:
+        json_path: "shop"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量"

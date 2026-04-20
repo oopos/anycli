@@ -1,0 +1,78 @@
+name: kuaishou
+description: "快手 — 视频搜索和热门（需要登录）"
+base_url: "https://www.kuaishou.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "快手热搜榜"
+    url: "https://www.kuaishou.com/brilliant"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('[class*="hot-item"], [class*="video-card"], .video-list li');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('[class*="title"], .video-info-title, a[title]');
+          const title = titleEl?.textContent?.trim() || titleEl?.getAttribute('title') || '';
+          const authorEl = el.querySelector('[class*="author"], .video-info-name');
+          const author = authorEl?.textContent?.trim() || '';
+          const link = el.querySelector('a')?.href || '';
+          if (title) results.push({title, author, url: link});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of videos to return"
+
+  search:
+    description: "搜索快手视频"
+    url: "https://www.kuaishou.com/search/video?searchKey={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 1000);
+        await new Promise(r => setTimeout(r, 2000));
+        const items = document.querySelectorAll('[class*="video-card"], [class*="search-item"]');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('[class*="title"], a[title]');
+          const title = titleEl?.textContent?.trim() || titleEl?.getAttribute('title') || '';
+          const authorEl = el.querySelector('[class*="author"], [class*="name"]');
+          const author = authorEl?.textContent?.trim() || '';
+          const link = el.querySelector('a')?.href || '';
+          if (title) results.push({title, author, url: link});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"

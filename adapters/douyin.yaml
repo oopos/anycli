@@ -1,0 +1,111 @@
+name: douyin
+description: "抖音 — 视频搜索和用户内容（需要登录）"
+base_url: "https://www.douyin.com"
+version: "1.0.0"
+
+commands:
+  user-videos:
+    description: "获取指定用户的视频列表"
+    url: "https://www.douyin.com/user/{sec_uid}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('[class*="video-card"]');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('[class*="title"], a[title]');
+          const title = titleEl?.textContent?.trim() || titleEl?.getAttribute('title') || '';
+          const link = el.querySelector('a')?.href || '';
+          const countEl = el.querySelector('[class*="count"], [class*="play"]');
+          const plays = countEl?.textContent?.trim() || '';
+          if (title) results.push({title, url: link, plays});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+      plays:
+        json_path: "plays"
+        default: ""
+    params:
+      sec_uid:
+        type: string
+        required: true
+        description: "用户 sec_uid (URL 末尾部分)"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of videos to return"
+
+  search:
+    description: "搜索抖音视频"
+    url: "https://www.douyin.com/search/{query}?type=video"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 1000);
+        await new Promise(r => setTimeout(r, 2000));
+        const items = document.querySelectorAll('[class*="search-result-card"], [class*="video-card"]');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('[class*="title"], a[title]');
+          const title = titleEl?.textContent?.trim() || titleEl?.getAttribute('title') || '';
+          const authorEl = el.querySelector('[class*="author"], [class*="nickname"]');
+          const author = authorEl?.textContent?.trim() || '';
+          const link = el.querySelector('a')?.href || '';
+          if (title) results.push({title, author, url: link});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  hot:
+    description: "抖音热搜榜"
+    url: "https://www.douyin.com/hot"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('[class*="hot-item"], [class*="hotItem"]');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('[class*="title"], [class*="word"]');
+          const title = titleEl?.textContent?.trim() || '';
+          const hotEl = el.querySelector('[class*="hot"], [class*="count"]');
+          const hot = hotEl?.textContent?.trim() || '';
+          if (title) results.push({title, hot});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      hot:
+        json_path: "hot"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 30
+        description: "Number of hot topics to return"

@@ -1,5 +1,5 @@
 name: xiaohongshu
-description: "小红书 — 搜索笔记和用户内容（需要登录）"
+description: "小红书 — 笔记搜索、用户内容和推荐（需要登录）"
 base_url: "https://www.xiaohongshu.com"
 version: "1.0.0"
 
@@ -7,26 +7,48 @@ commands:
   search:
     description: "搜索小红书笔记"
     url: "https://www.xiaohongshu.com/search_result?keyword={query}&type=1"
-    format: browser
-    selector: 'class="note-item".*?</section>'
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise((resolve) => {
+          const detect = () => document.querySelector('section.note-item') ? 'content' : null;
+          if (detect()) return resolve();
+          const observer = new MutationObserver(() => {
+            if (detect()) { observer.disconnect(); resolve(); }
+          });
+          observer.observe(document.body, { childList: true, subtree: true });
+          setTimeout(() => { observer.disconnect(); resolve(); }, 8000);
+        });
+        const items = document.querySelectorAll('section.note-item');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('.title span, a.title');
+          const title = titleEl?.textContent?.trim() || '';
+          const authorEl = el.querySelector('.author-wrapper .name, .nickname');
+          const author = authorEl?.textContent?.trim() || '';
+          const likeEl = el.querySelector('.like-wrapper .count, [class*="like"] .count');
+          const likes = likeEl?.textContent?.trim() || '';
+          const link = el.querySelector('a')?.href || '';
+          if (title || author) results.push({title, author, likes, url: link});
+        }
+        return JSON.stringify(results);
+      })()
     fields:
       title:
-        pattern: 'class="title[^"]*">([^<]+)<'
-        default: ""
+        json_path: "title"
       author:
-        pattern: 'class="name[^"]*">([^<]+)<'
+        json_path: "author"
         default: ""
       likes:
-        pattern: 'class="count">([^<]+)<'
+        json_path: "likes"
         default: ""
       url:
-        pattern: 'href="(/explore/[^"]+)"'
-        default: ""
+        json_path: "url"
     params:
       query:
         type: string
         required: true
-        description: "Search keyword"
+        description: "搜索关键词"
       limit:
         type: integer
         default: 20
@@ -35,20 +57,109 @@ commands:
   feed:
     description: "小红书首页推荐 Feed"
     url: "https://www.xiaohongshu.com/explore"
-    format: browser
-    selector: 'class="note-item".*?</section>'
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 1000);
+        await new Promise(r => setTimeout(r, 2000));
+        const items = document.querySelectorAll('section.note-item');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('.title span, a.title');
+          const title = titleEl?.textContent?.trim() || '';
+          const authorEl = el.querySelector('.author-wrapper .name, .nickname');
+          const author = authorEl?.textContent?.trim() || '';
+          const likeEl = el.querySelector('.like-wrapper .count, [class*="like"] .count');
+          const likes = likeEl?.textContent?.trim() || '';
+          if (title || author) results.push({title, author, likes});
+        }
+        return JSON.stringify(results);
+      })()
     fields:
       title:
-        pattern: 'class="title[^"]*">([^<]+)<'
-        default: ""
+        json_path: "title"
       author:
-        pattern: 'class="name[^"]*">([^<]+)<'
+        json_path: "author"
         default: ""
       likes:
-        pattern: 'class="count">([^<]+)<'
+        json_path: "likes"
         default: ""
     params:
       limit:
         type: integer
         default: 20
         description: "Number of items to return"
+
+  note:
+    description: "获取小红书笔记正文和互动数据"
+    url: "https://www.xiaohongshu.com/explore/{id}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const title = document.querySelector('#detail-title, .title')?.textContent?.trim() || '';
+        const content = document.querySelector('#detail-desc, .desc, .content')?.textContent?.trim() || '';
+        const author = document.querySelector('.username, .author-name')?.textContent?.trim() || '';
+        const likeEl = document.querySelector('[class*="like"] .count, .like-count');
+        const likes = likeEl?.textContent?.trim() || '';
+        const collectEl = document.querySelector('[class*="collect"] .count, .collect-count');
+        const collects = collectEl?.textContent?.trim() || '';
+        return JSON.stringify({title, content: content.slice(0, 500), author, likes, collects});
+      })()
+    fields:
+      title:
+        json_path: "title"
+      content:
+        json_path: "content"
+      author:
+        json_path: "author"
+        default: ""
+      likes:
+        json_path: "likes"
+        default: ""
+      collects:
+        json_path: "collects"
+        default: ""
+    params:
+      id:
+        type: string
+        required: true
+        description: "笔记 ID (24位hex)"
+
+  user:
+    description: "获取用户公开笔记"
+    url: "https://www.xiaohongshu.com/user/profile/{uid}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        const items = document.querySelectorAll('section.note-item');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('.title span, a.title, .cover');
+          const title = titleEl?.textContent?.trim() || titleEl?.getAttribute('alt') || '';
+          const likeEl = el.querySelector('.like-wrapper .count, [class*="like"] .count');
+          const likes = likeEl?.textContent?.trim() || '';
+          const link = el.querySelector('a')?.href || '';
+          if (title) results.push({title, likes, url: link});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      likes:
+        json_path: "likes"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      uid:
+        type: string
+        required: true
+        description: "用户 ID"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of notes to return"
