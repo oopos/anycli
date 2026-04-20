@@ -82,3 +82,62 @@ commands:
         type: integer
         default: 0
         description: "Category ID (0=all, 1=anime, 3=music, 4=game, 5=dance, 36=tech, 188=digital)"
+
+  history:
+    description: "我的观看历史 (needs login)"
+    url: "https://www.bilibili.com"
+    format: browser_api
+    evaluate: |
+      fetch('https://api.bilibili.com/x/web-interface/history/cursor?ps=20&type=archive',{credentials:'include'}).then(r=>r.json()).then(d=>JSON.stringify((d.data?.list||[]).map(i=>({title:i.title,author:i.author_name,bvid:i.history?.bvid||'',progress:i.progress,duration:i.duration}))))
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      bvid:
+        json_path: "bvid"
+      progress:
+        json_path: "progress"
+      duration:
+        json_path: "duration"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of items to return"
+
+  me:
+    description: "My Bilibili profile info (needs login)"
+    url: "https://www.bilibili.com"
+    format: browser_api
+    evaluate: |
+      fetch('https://api.bilibili.com/x/web-interface/nav',{credentials:'include'}).then(r=>r.json()).then(d=>JSON.stringify({uname:d.data?.uname,mid:d.data?.mid,money:d.data?.money,level:d.data?.level_info?.current_level}))
+    fields:
+      uname:
+        json_path: "uname"
+      mid:
+        json_path: "mid"
+      money:
+        json_path: "money"
+      level:
+        json_path: "level"
+    params: {}
+
+  feed:
+    description: "动态时间线 (needs login)"
+    url: "https://www.bilibili.com"
+    format: browser_api
+    evaluate: |
+      fetch('https://api.bilibili.com/x/polymer/web-dynamic/v1/feed/all?type=video&page=1',{credentials:'include'}).then(r=>r.json()).then(d=>JSON.stringify((d.data?.items||[]).map(i=>({author:i.modules?.module_author?.name,title:i.modules?.module_dynamic?.major?.archive?.title||'',bvid:i.modules?.module_dynamic?.major?.archive?.bvid||''}))))
+    fields:
+      author:
+        json_path: "author"
+      title:
+        json_path: "title"
+      bvid:
+        json_path: "bvid"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of items to return"

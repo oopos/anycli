@@ -103,10 +103,14 @@ impl Pipeline {
         debug!(url, adapter = adapter.name, command = command_name, "fetching");
 
         // Fetch.
-        let body = if cmd.format == SourceFormat::Browser {
-            self.browser_fetch(&url).await?
-        } else {
-            fetch(&url, &cmd.headers).await?
+        let body = match cmd.format {
+            SourceFormat::Browser => self.browser_fetch(&url).await?,
+            SourceFormat::BrowserApi => {
+                let js = cmd.evaluate.as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("browser_api format requires an 'evaluate' field"))?;
+                self.browser_eval(&url, js).await?
+            }
+            _ => fetch(&url, &cmd.headers).await?,
         };
 
         // Extract items.
@@ -125,7 +129,7 @@ impl Pipeline {
         } else {
             match cmd.format {
                 SourceFormat::Html | SourceFormat::Browser => extract_html(&body, cmd)?,
-                SourceFormat::Json => extract_json(&body, cmd)?,
+                SourceFormat::Json | SourceFormat::BrowserApi => extract_json(&body, cmd)?,
                 SourceFormat::Xml => extract_xml(&body, cmd)?,
             }
         };
@@ -153,9 +157,18 @@ impl Pipeline {
         if let Some(ref fetcher) = self.browser {
             fetcher.fetch(url).await
         } else {
-            // Fallback to agent-browser CLI
             let fallback = AgentBrowserFetcher::new();
             fallback.fetch(url).await
+        }
+    }
+
+    /// Navigate to URL and evaluate JS in browser context.
+    async fn browser_eval(&self, url: &str, js: &str) -> Result<String> {
+        if let Some(ref fetcher) = self.browser {
+            fetcher.eval(url, js).await
+        } else {
+            let fallback = AgentBrowserFetcher::new();
+            fallback.eval(url, js).await
         }
     }
 }
@@ -418,7 +431,7 @@ async fn fetch_each_item(
                 }
                 items.push(Value::Object(obj));
             }
-            SourceFormat::Html | SourceFormat::Xml | SourceFormat::Browser => {
+            SourceFormat::Html | SourceFormat::Xml | SourceFormat::Browser | SourceFormat::BrowserApi => {
                 let mut obj = serde_json::Map::new();
                 for (field_name, field_def) in &fe.fields {
                     let val = extract_field_html(&body, field_def)?;

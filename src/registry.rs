@@ -41,6 +41,9 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("tieba", include_str!("../adapters/tieba.yaml")),
     ("dictionary", include_str!("../adapters/dictionary.yaml")),
     ("weread", include_str!("../adapters/weread.yaml")),
+    ("youtube", include_str!("../adapters/youtube.yaml")),
+    ("xiaohongshu", include_str!("../adapters/xiaohongshu.yaml")),
+    ("linkedin", include_str!("../adapters/linkedin.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

@@ -1,0 +1,95 @@
+name: youtube
+description: "YouTube — video search, info, and transcripts (needs login for some features)"
+base_url: "https://www.youtube.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search YouTube videos"
+    url: "https://www.youtube.com/results?search_query={query}"
+    format: browser
+    selector: 'ytd-video-renderer.*?</ytd-video-renderer>'
+    fields:
+      title:
+        pattern: 'title-wrapper.*?title[^>]*>([^<]+)<'
+        default: ""
+      url:
+        pattern: 'href="(/watch\?v=[^"]+)"'
+        default: ""
+      channel:
+        pattern: 'channel-name.*?<a[^>]*>([^<]+)<'
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"
+
+  video:
+    description: "Get YouTube video metadata"
+    url: "https://www.youtube.com/watch?v={id}"
+    format: browser_api
+    evaluate: |
+      (() => {
+        const data = ytInitialPlayerResponse || {};
+        const vd = data.videoDetails || {};
+        return JSON.stringify({
+          title: vd.title,
+          author: vd.author,
+          viewCount: vd.viewCount,
+          lengthSeconds: vd.lengthSeconds,
+          description: (vd.shortDescription || '').slice(0, 200)
+        });
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      viewCount:
+        json_path: "viewCount"
+      lengthSeconds:
+        json_path: "lengthSeconds"
+      description:
+        json_path: "description"
+        default: ""
+    params:
+      id:
+        type: string
+        required: true
+        description: "Video ID (e.g. dQw4w9WgXcQ)"
+
+  transcript:
+    description: "Get YouTube video transcript/subtitles"
+    url: "https://www.youtube.com/watch?v={id}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const res = await fetch('/api/timedtext?v=' + new URLSearchParams(location.search).get('v') + '&lang=en&fmt=json3');
+        if (!res.ok) return JSON.stringify([]);
+        const data = await res.json();
+        const events = (data.events || []).filter(e => e.segs);
+        return JSON.stringify(events.slice(0, 50).map(e => ({
+          time: Math.round((e.tStartMs || 0) / 1000),
+          text: (e.segs || []).map(s => s.utf8).join('')
+        })));
+      })()
+    selector: ""
+    fields:
+      time:
+        json_path: "time"
+      text:
+        json_path: "text"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Video ID"
+      limit:
+        type: integer
+        default: 50
+        description: "Number of transcript lines to return"

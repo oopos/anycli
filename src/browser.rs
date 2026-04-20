@@ -11,6 +11,9 @@ use anyhow::{Context, Result, bail};
 pub trait BrowserFetcher: Send + Sync {
     /// Navigate to the URL and return the fully rendered HTML.
     async fn fetch(&self, url: &str) -> Result<String>;
+
+    /// Navigate to the URL, then evaluate JS and return the result.
+    async fn eval(&self, url: &str, js: &str) -> Result<String>;
 }
 
 /// Default implementation that shells out to `agent-browser` CLI.
@@ -96,5 +99,43 @@ impl BrowserFetcher for AgentBrowserFetcher {
 
         String::from_utf8(output.stdout)
             .context("agent-browser output is not valid UTF-8")
+    }
+
+    async fn eval(&self, url: &str, js: &str) -> Result<String> {
+        if !Self::is_available() {
+            bail!(
+                "agent-browser is not installed.\n\
+                 Install it with: npm install -g agent-browser\n\
+                 This adapter requires a browser to execute JavaScript."
+            );
+        }
+
+        // Navigate to URL first (for cookies)
+        let mut cmd = tokio::process::Command::new("agent-browser");
+        if let Some(ref profile) = self.profile {
+            cmd.args(["--profile", profile]);
+        }
+        cmd.args(["open", url]);
+        let open_output = cmd.output().await.context("failed to run agent-browser open")?;
+        if !open_output.status.success() {
+            let stderr = String::from_utf8_lossy(&open_output.stderr);
+            bail!("agent-browser open failed: {stderr}");
+        }
+
+        // Wait for page to load
+        tokio::time::sleep(std::time::Duration::from_secs(2)).await;
+
+        // Evaluate JS
+        let mut eval_cmd = tokio::process::Command::new("agent-browser");
+        eval_cmd.args(["eval", js]);
+        let output = eval_cmd.output().await.context("failed to run agent-browser eval")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("agent-browser eval failed: {stderr}");
+        }
+
+        String::from_utf8(output.stdout)
+            .context("agent-browser eval output is not valid UTF-8")
     }
 }

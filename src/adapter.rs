@@ -45,6 +45,11 @@ pub struct Command {
     /// Extra HTTP headers to send with the request.
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    /// JavaScript to evaluate in browser context (for `browser_api` format).
+    /// The JS should return a JSON string (use JSON.stringify).
+    #[serde(default)]
+    pub evaluate: Option<String>,
+
     /// Fetch each item individually by ID.
     /// The first response returns an array of IDs; each ID is fetched
     /// via `fetch_each.url` (with `{id}` placeholder) to build the final items.
@@ -67,13 +72,16 @@ pub struct FetchEach {
 
 /// Source format of the HTTP response.
 #[derive(Debug, Clone, Default, Deserialize, PartialEq)]
-#[serde(rename_all = "lowercase")]
+#[serde(rename_all = "snake_case")]
 pub enum SourceFormat {
     #[default]
     Html,
     Json,
     Xml,
     Browser,
+    /// Browser API mode: navigate to URL then eval JS to get JSON data.
+    /// Uses Chrome profile cookies for authenticated API calls.
+    BrowserApi,
 }
 
 /// Defines how to extract a single field from a matched item block.

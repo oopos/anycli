@@ -1,0 +1,37 @@
+name: linkedin
+description: "LinkedIn — job search and timeline (needs login)"
+base_url: "https://www.linkedin.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search LinkedIn jobs"
+    url: "https://www.linkedin.com/jobs/search/?keywords={query}&location={location}"
+    format: browser
+    selector: 'class="job-card-container[^"]*".*?</div></div></div>'
+    fields:
+      title:
+        pattern: 'job-card-list__title[^>]*>([^<]+)<'
+        default: ""
+      company:
+        pattern: 'job-card-container__primary-description[^>]*>([^<]+)<'
+        default: ""
+      location:
+        pattern: 'job-card-container__metadata-item[^>]*>([^<]+)<'
+        default: ""
+      url:
+        pattern: 'href="([^"]*jobs/view/[^"]*)"'
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Job search keywords"
+      location:
+        type: string
+        default: ""
+        description: "Location filter"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of jobs to return"
