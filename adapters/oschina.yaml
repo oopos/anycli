@@ -1,0 +1,42 @@
+name: oschina
+description: "开源中国 — 技术资讯和项目搜索"
+base_url: "https://www.oschina.net"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索开源中国文章和项目"
+    url: "https://www.oschina.net/search?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('.search-results .item, .search-list .item');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('h3 a, .title a');
+          const title = titleEl?.textContent?.trim() || '';
+          const url = titleEl?.href || '';
+          const descEl = el.querySelector('.description, .content, p');
+          const desc = descEl?.textContent?.trim()?.slice(0, 150) || '';
+          if (title) results.push({title, description: desc, url});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      description:
+        json_path: "description"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

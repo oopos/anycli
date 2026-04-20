@@ -1,0 +1,66 @@
+name: toutiao
+description: "今日头条 — 新闻资讯搜索和热榜"
+base_url: "https://www.toutiao.com"
+version: "1.0.0"
+
+commands:
+  hot:
+    description: "今日头条热榜"
+    url: "https://www.toutiao.com/hot-event/hot-board/?origin=toutiao_pc"
+    format: json
+    selector: "data"
+    fields:
+      title:
+        json_path: "Title"
+      url:
+        json_path: "Url"
+        default: ""
+      hotValue:
+        json_path: "HotValue"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 30
+        description: "Number of hot topics"
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+  search:
+    description: "搜索今日头条文章"
+    url: "https://www.toutiao.com/search/?keyword={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 1000);
+        await new Promise(r => setTimeout(r, 2000));
+        const items = document.querySelectorAll('[class*="result-content"], [class*="search-card"]');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('a[class*="title"], h3 a');
+          const title = titleEl?.textContent?.trim() || '';
+          const url = titleEl?.href || '';
+          const srcEl = el.querySelector('[class*="source"], [class*="author"]');
+          const source = srcEl?.textContent?.trim() || '';
+          if (title) results.push({title, source, url});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      source:
+        json_path: "source"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

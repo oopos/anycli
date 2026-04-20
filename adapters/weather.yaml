@@ -1,0 +1,49 @@
+name: weather
+description: "天气查询 — 当前天气和预报 (wttr.in)"
+base_url: "https://wttr.in"
+version: "1.0.0"
+
+commands:
+  now:
+    description: "Current weather for a city"
+    url: "/{city}?format=j1"
+    format: json
+    selector: "current_condition"
+    fields:
+      temp_C:
+        json_path: "temp_C"
+      humidity:
+        json_path: "humidity"
+      weatherDesc:
+        json_path: "weatherDesc[0].value"
+        default: ""
+      windspeedKmph:
+        json_path: "windspeedKmph"
+      feelsLikeC:
+        json_path: "FeelsLikeC"
+    params:
+      city:
+        type: string
+        required: true
+        description: "City name (e.g. Beijing, Tokyo, London)"
+
+  forecast:
+    description: "3-day weather forecast"
+    url: "/{city}?format=j1"
+    format: json
+    selector: "weather"
+    fields:
+      date:
+        json_path: "date"
+      maxtempC:
+        json_path: "maxtempC"
+      mintempC:
+        json_path: "mintempC"
+      weatherDesc:
+        json_path: "hourly[4].weatherDesc[0].value"
+        default: ""
+    params:
+      city:
+        type: string
+        required: true
+        description: "City name"

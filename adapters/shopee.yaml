@@ -1,0 +1,69 @@
+name: shopee
+description: "Shopee — Search products and browse deals on Southeast Asia's leading e-commerce platform"
+base_url: "https://shopee.sg"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search Shopee product listings"
+    url: "https://shopee.sg/search?keyword={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 1500));
+        const items = Array.from(document.querySelectorAll('.shopee-search-item-result__item, [data-sqe="item"], .col-xs-2-4 > a, li.shopee-search-item-result__item'));
+        const results = [];
+        for (const el of items) {
+          const title = (el.querySelector('.ie3A\\+n, [data-sqe="name"], .Cve6sh, .shopee-item-card__text-name, [class*="itemCardName"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+          const price = (el.querySelector('.vioxXd, .ZEgDH9, [class*="price"], .shopee-item-card__current-price')?.textContent || '').trim();
+          const sold = (el.querySelector('.r6HknA, .go5yPW, [class*="sold"], .shopee-item-card__sold-count')?.textContent || '').trim();
+          const rating = el.querySelector('.shopee-rating-stars__lit, [class*="rating"]')?.style?.width || '';
+          const shop = (el.querySelector('[class*="shopName"], [class*="seller"]')?.textContent || '').trim();
+          const link = el.querySelector('a')?.href || el.closest('a')?.href || '';
+          if (!title) continue;
+          let ratingValue = '';
+          if (rating) {
+            const pct = parseFloat(rating);
+            if (!isNaN(pct)) ratingValue = (pct / 20).toFixed(1);
+          }
+          results.push({
+            title: title.slice(0, 150),
+            price: price || 'N/A',
+            sold: sold || 'N/A',
+            rating: ratingValue || 'N/A',
+            shop: shop || 'N/A',
+            url: link
+          });
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      sold:
+        json_path: "sold"
+        default: ""
+      rating:
+        json_path: "rating"
+        default: ""
+      shop:
+        json_path: "shop"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

@@ -1,0 +1,64 @@
+name: lazada
+description: "Lazada — Search products and browse deals on Southeast Asia's e-commerce marketplace"
+base_url: "https://www.lazada.sg"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search Lazada product listings"
+    url: "https://www.lazada.sg/catalog/?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 1500));
+        const cards = Array.from(document.querySelectorAll('[data-qa-locator="product-item"], .Bm3ON, .qmXQo, [class*="product-card"], div[data-tracking="product-card"]'));
+        const results = [];
+        for (const el of cards) {
+          const title = (el.querySelector('.RfADt a, [class*="title"], a[title], .product-card__name')?.textContent || el.querySelector('a[title]')?.getAttribute('title') || '').replace(/\s+/g, ' ').trim();
+          const price = (el.querySelector('.ooOxS, [class*="price-current"], .product-card__price, span[class*="currency"]')?.textContent || '').trim();
+          const originalPrice = (el.querySelector('.WNoq3, [class*="price-original"], [class*="del"]')?.textContent || '').trim();
+          const rating = (el.querySelector('.qzqFw, [class*="rating-value"], [class*="rate"]')?.textContent || '').trim();
+          const sold = (el.querySelector('[class*="sold"], [class*="review"], .product-card__sold')?.textContent || '').trim();
+          const link = el.querySelector('a[href*="/products/"], a[href*="lazada"]')?.href || el.querySelector('a')?.href || '';
+          if (!title) continue;
+          results.push({
+            title: title.slice(0, 150),
+            price: price || 'N/A',
+            original_price: originalPrice || '',
+            rating: rating || 'N/A',
+            sold: sold || 'N/A',
+            url: link
+          });
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      original_price:
+        json_path: "original_price"
+        default: ""
+      rating:
+        json_path: "rating"
+        default: ""
+      sold:
+        json_path: "sold"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

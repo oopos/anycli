@@ -1,0 +1,32 @@
+name: pypi
+description: "PyPI — Python package info"
+base_url: "https://pypi.org"
+version: "1.0.0"
+
+commands:
+  info:
+    description: "Get Python package info"
+    url: "/pypi/{name}/json"
+    format: json
+    fields:
+      name:
+        json_path: "info.name"
+      version:
+        json_path: "info.version"
+      summary:
+        json_path: "info.summary"
+        default: ""
+      author:
+        json_path: "info.author"
+        default: ""
+      license:
+        json_path: "info.license"
+        default: ""
+      home_page:
+        json_path: "info.home_page"
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        description: "Package name (e.g. requests, flask, numpy)"

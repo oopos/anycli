@@ -1,0 +1,52 @@
+name: csdn
+description: "CSDN — 中文技术博客搜索"
+base_url: "https://so.csdn.net"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索 CSDN 技术文章"
+    url: "https://so.csdn.net/so/search?q={query}&t=blog"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('.search-list-con .search-item');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('.title-content a, h3 a');
+          const title = titleEl?.textContent?.trim() || '';
+          const url = titleEl?.href || '';
+          const descEl = el.querySelector('.content, .desc');
+          const desc = descEl?.textContent?.trim()?.slice(0, 150) || '';
+          const authorEl = el.querySelector('.author-name, .nick-name');
+          const author = authorEl?.textContent?.trim() || '';
+          const dateEl = el.querySelector('.date, .time');
+          const date = dateEl?.textContent?.trim() || '';
+          if (title) results.push({title, author, date, description: desc, url});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+        default: ""
+      date:
+        json_path: "date"
+        default: ""
+      description:
+        json_path: "description"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

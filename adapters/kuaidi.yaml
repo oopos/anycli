@@ -1,0 +1,25 @@
+name: kuaidi
+description: "快递查询 — 包裹物流追踪"
+base_url: "https://www.kuaidi100.com"
+version: "1.0.0"
+
+commands:
+  query:
+    description: "查询快递物流信息"
+    url: "https://www.kuaidi100.com/query?type={company}&postid={tracking_id}&temp=0.5"
+    format: json
+    selector: "data"
+    fields:
+      time:
+        json_path: "time"
+      context:
+        json_path: "context"
+    params:
+      company:
+        type: string
+        required: true
+        description: "快递公司代码 (e.g. shunfeng, yuantong, zhongtong, yunda, ems)"
+      tracking_id:
+        type: string
+        required: true
+        description: "快递单号"

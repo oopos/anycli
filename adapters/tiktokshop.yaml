@@ -1,0 +1,57 @@
+name: tiktokshop
+description: "TikTok Shop — Search and browse products on TikTok's e-commerce platform"
+base_url: "https://www.tiktok.com/shop"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "Search TikTok Shop products"
+    url: "https://www.tiktok.com/shop/search?q={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 5000));
+        window.scrollBy(0, 2000);
+        await new Promise(r => setTimeout(r, 2000));
+        const cards = Array.from(document.querySelectorAll('[data-e2e="search-card-item"], .search-card-item, [class*="ProductCard"], [class*="product-card"]'));
+        const results = [];
+        for (const el of cards) {
+          const title = (el.querySelector('[data-e2e="search-card-item-title"], [class*="ProductTitle"], [class*="product-title"], h3, p[class*="title"]')?.textContent || '').replace(/\s+/g, ' ').trim();
+          const price = (el.querySelector('[data-e2e="search-card-item-price"], [class*="Price"], [class*="price"], span[class*="sale"]')?.textContent || '').trim();
+          const rating = (el.querySelector('[class*="Rating"], [class*="rating"], [class*="star"]')?.textContent || '').trim();
+          const sales = (el.querySelector('[class*="sold"], [class*="Sales"], [class*="sales"]')?.textContent || '').trim();
+          const link = el.querySelector('a[href*="/product/"], a[href*="/shop/"]')?.href || el.closest('a')?.href || '';
+          if (!title) continue;
+          results.push({
+            title: title.slice(0, 150),
+            price: price || 'N/A',
+            rating: rating || 'N/A',
+            sales: sales || 'N/A',
+            url: link
+          });
+          if (results.length >= 20) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      price:
+        json_path: "price"
+      rating:
+        json_path: "rating"
+        default: ""
+      sales:
+        json_path: "sales"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results"

@@ -1,0 +1,22 @@
+name: exchange
+description: "汇率查询 — 实时汇率 (exchangerate-api)"
+base_url: "https://open.er-api.com/v6"
+version: "1.0.0"
+
+commands:
+  rate:
+    description: "Get exchange rates for a base currency"
+    url: "/latest/{base}"
+    format: json
+    fields:
+      base:
+        json_path: "base_code"
+      time_last_update:
+        json_path: "time_last_update_utc"
+      rates:
+        json_path: "rates"
+    params:
+      base:
+        type: string
+        required: true
+        description: "Base currency code (e.g. USD, CNY, EUR, JPY)"

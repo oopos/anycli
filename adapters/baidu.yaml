@@ -1,0 +1,42 @@
+name: baidu
+description: "百度搜索"
+base_url: "https://www.baidu.com"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "百度网页搜索"
+    url: "https://www.baidu.com/s?wd={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        await new Promise(r => setTimeout(r, 3000));
+        const items = document.querySelectorAll('#content_left .result, #content_left .c-container');
+        const results = [];
+        for (const el of items) {
+          const titleEl = el.querySelector('h3 a, .t a');
+          const title = titleEl?.textContent?.trim() || '';
+          const url = titleEl?.href || '';
+          const descEl = el.querySelector('.c-abstract, .content-right_8Zs40');
+          const desc = descEl?.textContent?.trim()?.slice(0, 200) || '';
+          if (title && !title.includes('广告')) results.push({title, description: desc, url});
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      title:
+        json_path: "title"
+      description:
+        json_path: "description"
+        default: ""
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

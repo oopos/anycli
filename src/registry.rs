@@ -103,6 +103,16 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("spotify", include_str!("../adapters/spotify.yaml")),
     ("uiverse", include_str!("../adapters/uiverse.yaml")),
     ("web", include_str!("../adapters/web.yaml")),
+    ("weather", include_str!("../adapters/weather.yaml")),
+    ("npm", include_str!("../adapters/npm.yaml")),
+    ("crates", include_str!("../adapters/crates.yaml")),
+    ("pypi", include_str!("../adapters/pypi.yaml")),
+    ("exchange", include_str!("../adapters/exchange.yaml")),
+    ("kuaidi", include_str!("../adapters/kuaidi.yaml")),
+    ("csdn", include_str!("../adapters/csdn.yaml")),
+    ("oschina", include_str!("../adapters/oschina.yaml")),
+    ("baidu", include_str!("../adapters/baidu.yaml")),
+    ("toutiao", include_str!("../adapters/toutiao.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.
