@@ -25,8 +25,8 @@ enum Commands {
         /// Parameters as key=value pairs (e.g., limit=10 query="rust").
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         params: Vec<String>,
-        /// Output format: json, table, csv, markdown.
-        #[arg(long, short, default_value = "json")]
+        /// Output format: table, json, md, yaml, csv.
+        #[arg(long, short, default_value = "table")]
         format: String,
     },
     /// List all available adapters.
@@ -59,23 +59,83 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
-    // Intercept `anycli run <adapter> --help` before clap parses it.
-    // Transform: `run <adapter> --help` → `run <adapter> help`
-    //            `run <adapter> <cmd> --help` → `run <adapter> <cmd> help`
+    // Intercept `anycli run <adapter> --help` and `--format` before clap parses.
     let args: Vec<String> = std::env::args().collect();
     if args.len() >= 3 && args[1] == "run" {
+        // Handle --help
         let has_help = args[2..].iter().any(|a| a == "--help" || a == "-h");
         if has_help {
             let registry = Registry::load()?;
             let adapter_name = &args[2];
             if let Ok(adapter) = registry.find(adapter_name) {
-                // Find the command (if any) before --help
                 let cmd_name = args[3..].iter().find(|a| *a != "--help" && *a != "-h");
                 if let Some(cmd) = cmd_name {
                     print_command_help(adapter, cmd)?;
                 } else {
                     print_adapter_help(adapter, None);
                 }
+                return Ok(());
+            }
+        }
+
+        // Extract --format / -f from args before clap (since trailing_var_arg eats it)
+        let mut format_override: Option<String> = None;
+        let mut filtered_args: Vec<String> = Vec::new();
+        let mut skip_next = false;
+        for (i, arg) in args.iter().enumerate() {
+            if skip_next { skip_next = false; continue; }
+            if arg == "--format" || arg == "-f" {
+                if let Some(val) = args.get(i + 1) {
+                    format_override = Some(val.clone());
+                    skip_next = true;
+                    continue;
+                }
+            }
+            if let Some(val) = arg.strip_prefix("--format=") {
+                format_override = Some(val.to_string());
+                continue;
+            }
+            filtered_args.push(arg.clone());
+        }
+
+        if format_override.is_some() {
+            // Re-run with filtered args + format injected as clap arg
+            let fmt = format_override.unwrap();
+            let registry = Registry::load()?;
+
+            // Parse adapter, command, params from filtered_args
+            // filtered_args: [binary, "run", adapter, command, ...params]
+            if filtered_args.len() >= 4 {
+                let adapter_name = &filtered_args[2];
+                let command = &filtered_args[3];
+                let params = &filtered_args[4..];
+
+                // Handle help
+                if command == "help" || command == "--help" || command == "-h" {
+                    let adapter = registry.find(adapter_name)?;
+                    print_adapter_help(adapter, params.first().map(|s| s.as_str()));
+                    return Ok(());
+                }
+
+                let adapter = registry.find(adapter_name)?;
+                let fmt: OutputFormat = fmt.parse()?;
+
+                let parsed: Vec<(String, String)> = params
+                    .iter()
+                    .filter(|p| !p.starts_with('-'))
+                    .filter_map(|p| {
+                        let (k, v) = p.split_once('=')?;
+                        Some((k.to_owned(), v.to_owned()))
+                    })
+                    .collect();
+
+                let param_refs: Vec<(&str, &str)> = parsed
+                    .iter()
+                    .map(|(k, v)| (k.as_str(), v.as_str()))
+                    .collect();
+
+                let result = Pipeline::execute(adapter, command, &param_refs).await?;
+                println!("{}", result.format(fmt)?);
                 return Ok(());
             }
         }

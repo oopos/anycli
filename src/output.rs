@@ -10,21 +10,23 @@ use crate::pipeline::PipelineResult;
 #[serde(rename_all = "lowercase")]
 pub enum OutputFormat {
     #[default]
-    Json,
     Table,
+    Json,
     Csv,
     Markdown,
+    Yaml,
 }
 
 impl std::str::FromStr for OutputFormat {
     type Err = anyhow::Error;
     fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
-            "json" => Ok(Self::Json),
             "table" => Ok(Self::Table),
+            "json" => Ok(Self::Json),
             "csv" => Ok(Self::Csv),
             "markdown" | "md" => Ok(Self::Markdown),
-            _ => bail!("unknown format `{s}`. supported: json, table, csv, markdown"),
+            "yaml" | "yml" => Ok(Self::Yaml),
+            _ => bail!("unknown format `{s}`. supported: table, json, md, yaml, csv"),
         }
     }
 }
@@ -32,10 +34,11 @@ impl std::str::FromStr for OutputFormat {
 /// Format a pipeline result into the specified output format.
 pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<String> {
     match fmt {
-        OutputFormat::Json => format_json(result),
         OutputFormat::Table => format_table(result),
+        OutputFormat::Json => format_json(result),
         OutputFormat::Csv => format_csv(result),
         OutputFormat::Markdown => format_markdown(result),
+        OutputFormat::Yaml => format_yaml(result),
     }
 }
 
@@ -144,6 +147,10 @@ fn format_markdown(result: &PipelineResult) -> Result<String> {
     }
 
     Ok(out)
+}
+
+fn format_yaml(result: &PipelineResult) -> Result<String> {
+    Ok(serde_yaml_ng::to_string(&result.items)?)
 }
 
 /// Collect ordered field names from the first item.
