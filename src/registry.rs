@@ -113,6 +113,10 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("oschina", include_str!("../adapters/oschina.yaml")),
     ("baidu", include_str!("../adapters/baidu.yaml")),
     ("toutiao", include_str!("../adapters/toutiao.yaml")),
+    ("ebay", include_str!("../adapters/ebay.yaml")),
+    ("lazada", include_str!("../adapters/lazada.yaml")),
+    ("shopee", include_str!("../adapters/shopee.yaml")),
+    ("tiktokshop", include_str!("../adapters/tiktokshop.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.
