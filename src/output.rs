@@ -88,7 +88,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
     for (i, key) in keys.iter().enumerate() {
         if i > 0 { out.push_str("│"); }
         let padded = pad_display(key, widths[i]);
-        out.push_str(&format!(" \x1b[1;34m{padded}\x1b[0m "));
+        out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
     }
     out.push_str("│\n");
 
