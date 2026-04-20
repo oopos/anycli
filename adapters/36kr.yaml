@@ -5,7 +5,7 @@ version: "1.0.0"
 
 commands:
   hot:
-    description: "Hot articles (人气榜)"
+    description: "36氪热榜 — trending articles (renqi/zonghe/shoucang/catalog)"
     url: "/hot-list/catalog"
     format: browser
     selector: 'class="article-wrapper[^"]*".*?</div></div></div></div></div>'
@@ -28,3 +28,50 @@ commands:
         type: integer
         default: 20
         description: "Number of articles to return"
+
+  search:
+    description: "搜索36氪文章"
+    url: "/search/articles/{query}"
+    format: browser
+    selector: 'class="search-result-list-item-article".*?</li>'
+    fields:
+      title:
+        pattern: 'article-item-title[^>]*>([^<]+)<'
+        transform: strip_html
+      url:
+        pattern: 'article-item-title[^"]*" href="([^"]+)"'
+      description:
+        pattern: 'article-item-description[^>]*>([^<]+)<'
+        default: ""
+      time:
+        pattern: 'kr-flow-bar-time-icon"></i>([^<]+)<'
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+
+  news:
+    description: "Latest tech/startup news from 36kr (36氪)"
+    url: "/newsflashes"
+    format: browser
+    selector: 'class="newsflash-item".*?</div></div>'
+    fields:
+      title:
+        pattern: 'item-title[^>]*>([^<]+)<'
+      url:
+        pattern: 'item-title[^"]*" href="([^"]+)"'
+        default: ""
+      time:
+        pattern: 'time[^>]*>([^<]+)<'
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of news items to return"
