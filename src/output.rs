@@ -15,6 +15,8 @@ pub enum OutputFormat {
     Csv,
     Markdown,
     Yaml,
+    /// Tab-separated values, no borders, no headers. For piping.
+    Plain,
 }
 
 impl std::str::FromStr for OutputFormat {
@@ -26,7 +28,8 @@ impl std::str::FromStr for OutputFormat {
             "csv" => Ok(Self::Csv),
             "markdown" | "md" => Ok(Self::Markdown),
             "yaml" | "yml" => Ok(Self::Yaml),
-            _ => bail!("unknown format `{s}`. supported: table, json, md, yaml, csv"),
+            "plain" | "tsv" => Ok(Self::Plain),
+            _ => bail!("unknown format `{s}`. supported: table, json, md, yaml, csv, plain"),
         }
     }
 }
@@ -39,6 +42,7 @@ pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<Strin
         OutputFormat::Csv => format_csv(result),
         OutputFormat::Markdown => format_markdown(result),
         OutputFormat::Yaml => format_yaml(result),
+        OutputFormat::Plain => format_plain(result),
     }
 }
 
@@ -174,6 +178,20 @@ fn format_markdown(result: &PipelineResult) -> Result<String> {
 
 fn format_yaml(result: &PipelineResult) -> Result<String> {
     Ok(serde_yaml_ng::to_string(&result.items)?)
+}
+
+fn format_plain(result: &PipelineResult) -> Result<String> {
+    if result.items.is_empty() {
+        return Ok(String::new());
+    }
+    let keys = collect_keys(result);
+    let mut out = String::new();
+    for item in &result.items {
+        let row: Vec<String> = keys.iter().map(|k| cell_value(item, k)).collect();
+        out.push_str(&row.join("\t"));
+        out.push('\n');
+    }
+    Ok(out)
 }
 
 /// Collect ordered field names from the first item.
