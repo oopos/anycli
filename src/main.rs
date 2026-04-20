@@ -20,8 +20,8 @@ enum Commands {
     Run {
         /// Adapter name (e.g., "hackernews", "bilibili").
         adapter: String,
-        /// Command name (e.g., "top", "search", "help", "--help").
-        command: String,
+        /// Command name (e.g., "top", "search", "help"). Shows help if omitted.
+        command: Option<String>,
         /// Parameters as key=value pairs (e.g., limit=10 query="rust").
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         params: Vec<String>,
@@ -178,7 +178,15 @@ async fn run() -> Result<()> {
         } => {
             let adapter = registry.find(&name)?;
 
-            // Show adapter help: `anycli run <adapter> help` or `anycli run <adapter> --help`
+            // No command or help command → show adapter help
+            let command = match command {
+                None => {
+                    print_adapter_help(adapter, None);
+                    return Ok(());
+                }
+                Some(c) => c,
+            };
+
             if command == "help" || command == "--help" || command == "-h" {
                 print_adapter_help(adapter, params.first().map(|s| s.as_str()));
                 return Ok(());
