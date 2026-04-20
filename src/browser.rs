@@ -14,6 +14,12 @@ pub trait BrowserFetcher: Send + Sync {
 
     /// Navigate to the URL, then evaluate JS and return the result.
     async fn eval(&self, url: &str, js: &str) -> Result<String>;
+
+    /// Connect to a desktop app via CDP and evaluate JS.
+    async fn desktop_eval(&self, target: &str, js: &str) -> Result<String>;
+
+    /// Navigate to URL and intercept a network response matching the pattern.
+    async fn intercept(&self, url: &str, pattern: &str) -> Result<String>;
 }
 
 /// Default implementation that shells out to `agent-browser` CLI.
@@ -137,5 +143,64 @@ impl BrowserFetcher for AgentBrowserFetcher {
 
         String::from_utf8(output.stdout)
             .context("agent-browser eval output is not valid UTF-8")
+    }
+
+    async fn desktop_eval(&self, target: &str, js: &str) -> Result<String> {
+        if !Self::is_available() {
+            bail!("agent-browser is not installed.");
+        }
+
+        // Connect to desktop app via CDP
+        // target can be a port number or --auto-connect for discovery
+        let mut connect_cmd = tokio::process::Command::new("agent-browser");
+        if target.chars().all(|c| c.is_ascii_digit()) {
+            connect_cmd.args(["--cdp", target]);
+        } else {
+            // Use auto-connect for app name discovery
+            connect_cmd.arg("--auto-connect");
+        }
+        connect_cmd.args(["eval", js]);
+
+        let output = connect_cmd.output().await
+            .context("failed to run agent-browser for desktop eval")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("agent-browser desktop eval failed: {stderr}");
+        }
+
+        String::from_utf8(output.stdout)
+            .context("agent-browser output is not valid UTF-8")
+    }
+
+    async fn intercept(&self, url: &str, pattern: &str) -> Result<String> {
+        if !Self::is_available() {
+            bail!("agent-browser is not installed.");
+        }
+
+        // Start network capture, navigate, then extract matching response
+        let mut cmd = tokio::process::Command::new("agent-browser");
+        if let Some(ref profile) = self.profile {
+            cmd.args(["--profile", profile]);
+        }
+        cmd.args(["open", url]);
+        cmd.output().await.context("failed to open page")?;
+
+        // Wait for network requests
+        tokio::time::sleep(std::time::Duration::from_secs(3)).await;
+
+        // Get captured requests matching pattern
+        let mut req_cmd = tokio::process::Command::new("agent-browser");
+        req_cmd.args(["network", "requests", "--filter", pattern]);
+        let output = req_cmd.output().await
+            .context("failed to get network requests")?;
+
+        if !output.status.success() {
+            let stderr = String::from_utf8_lossy(&output.stderr);
+            bail!("agent-browser network intercept failed: {stderr}");
+        }
+
+        String::from_utf8(output.stdout)
+            .context("agent-browser output is not valid UTF-8")
     }
 }

@@ -45,10 +45,20 @@ pub struct Command {
     /// Extra HTTP headers to send with the request.
     #[serde(default)]
     pub headers: HashMap<String, String>,
-    /// JavaScript to evaluate in browser context (for `browser_api` format).
+    /// JavaScript to evaluate in browser context (for `browser_api`/`desktop` format).
     /// The JS should return a JSON string (use JSON.stringify).
     #[serde(default)]
     pub evaluate: Option<String>,
+
+    /// CDP port or app name to connect to (for `desktop` format).
+    /// Can be a port number (e.g. "9222") or app name for auto-discovery.
+    #[serde(default)]
+    pub cdp_target: Option<String>,
+
+    /// URL pattern to intercept network responses (for `intercept` format).
+    /// Captures the first matching response body as the data source.
+    #[serde(default)]
+    pub intercept_pattern: Option<String>,
 
     /// Fetch each item individually by ID.
     /// The first response returns an array of IDs; each ID is fetched
@@ -78,10 +88,16 @@ pub enum SourceFormat {
     Html,
     Json,
     Xml,
+    /// Browser render mode: navigate + get rendered HTML.
     Browser,
     /// Browser API mode: navigate to URL then eval JS to get JSON data.
     /// Uses Chrome profile cookies for authenticated API calls.
     BrowserApi,
+    /// Desktop mode: connect to running Electron/native app via CDP, eval JS.
+    /// For controlling Cursor, ChatGPT Desktop, Discord, etc.
+    Desktop,
+    /// Intercept mode: open page in browser, capture network response matching a pattern.
+    Intercept,
 }
 
 /// Defines how to extract a single field from a matched item block.

@@ -1,0 +1,79 @@
+name: chatgpt
+description: "ChatGPT — desktop app control via CDP"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check ChatGPT Desktop connection"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({url: window.location.href, title: document.title, status: 'connected'})
+    fields:
+      status:
+        json_path: "status"
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+    params: {}
+
+  send:
+    description: "Send a message to ChatGPT"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const textarea = document.querySelector('#prompt-textarea, textarea[data-id]');
+        if (!textarea) return JSON.stringify({error: 'No input found'});
+        const nativeInputValueSetter = Object.getOwnPropertyDescriptor(window.HTMLTextAreaElement.prototype, 'value').set;
+        nativeInputValueSetter.call(textarea, '${{text}}');
+        textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        const btn = document.querySelector('[data-testid="send-button"], button[aria-label*="Send"]');
+        if (btn) btn.click();
+        return JSON.stringify({status: 'sent'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  read:
+    description: "Read last ChatGPT response"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const msgs = document.querySelectorAll('[data-message-author-role="assistant"]');
+        const last = msgs[msgs.length - 1];
+        if (!last) return JSON.stringify({text: ''});
+        return JSON.stringify({text: last.textContent?.trim() || ''});
+      })()
+    fields:
+      text:
+        json_path: "text"
+    params: {}
+
+  new:
+    description: "Start a new ChatGPT conversation"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const btn = document.querySelector('nav a[href="/"]') || document.querySelector('[data-testid="new-chat-button"]');
+        if (btn) btn.click();
+        return JSON.stringify({status: 'new conversation started'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}

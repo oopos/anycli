@@ -44,6 +44,8 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("youtube", include_str!("../adapters/youtube.yaml")),
     ("xiaohongshu", include_str!("../adapters/xiaohongshu.yaml")),
     ("linkedin", include_str!("../adapters/linkedin.yaml")),
+    ("cursor", include_str!("../adapters/cursor.yaml")),
+    ("chatgpt", include_str!("../adapters/chatgpt.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

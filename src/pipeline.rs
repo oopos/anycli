@@ -110,6 +110,17 @@ impl Pipeline {
                     .ok_or_else(|| anyhow::anyhow!("browser_api format requires an 'evaluate' field"))?;
                 self.browser_eval(&url, js).await?
             }
+            SourceFormat::Desktop => {
+                let js = cmd.evaluate.as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("desktop format requires an 'evaluate' field"))?;
+                let target = cmd.cdp_target.as_deref().unwrap_or("auto");
+                self.desktop_eval(target, js).await?
+            }
+            SourceFormat::Intercept => {
+                let pattern = cmd.intercept_pattern.as_deref()
+                    .ok_or_else(|| anyhow::anyhow!("intercept format requires an 'intercept_pattern' field"))?;
+                self.browser_intercept(&url, pattern).await?
+            }
             _ => fetch(&url, &cmd.headers).await?,
         };
 
@@ -129,7 +140,7 @@ impl Pipeline {
         } else {
             match cmd.format {
                 SourceFormat::Html | SourceFormat::Browser => extract_html(&body, cmd)?,
-                SourceFormat::Json | SourceFormat::BrowserApi => extract_json(&body, cmd)?,
+                SourceFormat::Json | SourceFormat::BrowserApi | SourceFormat::Desktop | SourceFormat::Intercept => extract_json(&body, cmd)?,
                 SourceFormat::Xml => extract_xml(&body, cmd)?,
             }
         };
@@ -169,6 +180,26 @@ impl Pipeline {
         } else {
             let fallback = AgentBrowserFetcher::new();
             fallback.eval(url, js).await
+        }
+    }
+
+    /// Connect to desktop app via CDP and evaluate JS.
+    async fn desktop_eval(&self, target: &str, js: &str) -> Result<String> {
+        if let Some(ref fetcher) = self.browser {
+            fetcher.desktop_eval(target, js).await
+        } else {
+            let fallback = AgentBrowserFetcher::new();
+            fallback.desktop_eval(target, js).await
+        }
+    }
+
+    /// Navigate to URL and intercept network response matching pattern.
+    async fn browser_intercept(&self, url: &str, pattern: &str) -> Result<String> {
+        if let Some(ref fetcher) = self.browser {
+            fetcher.intercept(url, pattern).await
+        } else {
+            let fallback = AgentBrowserFetcher::new();
+            fallback.intercept(url, pattern).await
         }
     }
 }
@@ -431,7 +462,7 @@ async fn fetch_each_item(
                 }
                 items.push(Value::Object(obj));
             }
-            SourceFormat::Html | SourceFormat::Xml | SourceFormat::Browser | SourceFormat::BrowserApi => {
+            _ => {
                 let mut obj = serde_json::Map::new();
                 for (field_name, field_def) in &fe.fields {
                     let val = extract_field_html(&body, field_def)?;

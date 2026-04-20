@@ -1,0 +1,70 @@
+name: cursor
+description: "Cursor — AI code editor (desktop app via CDP)"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check Cursor CDP connection status"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({url: window.location.href, title: document.title, status: 'connected'})
+    fields:
+      status:
+        json_path: "status"
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+    params: {}
+
+  send:
+    description: "Send a prompt to Cursor chat"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const editor = document.querySelector('[contenteditable="true"]');
+        if (!editor) return JSON.stringify({error: 'No editor found'});
+        editor.focus();
+        document.execCommand('insertText', false, '${{text}}');
+        return JSON.stringify({status: 'sent', text: '${{text}}'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+      text:
+        json_path: "text"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Text to send"
+
+  read:
+    description: "Read current Cursor chat conversation"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const messages = document.querySelectorAll('.message-content, .chat-message');
+        const result = Array.from(messages).slice(-10).map(el => ({
+          role: el.closest('[data-role]')?.dataset?.role || 'unknown',
+          text: el.textContent?.trim().slice(0, 500) || ''
+        }));
+        return JSON.stringify(result);
+      })()
+    fields:
+      role:
+        json_path: "role"
+      text:
+        json_path: "text"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of messages to return"
