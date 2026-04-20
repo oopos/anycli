@@ -371,24 +371,36 @@ fn extract_id_list(body: &str, cmd: &Command) -> Result<Vec<String>> {
 }
 
 /// Fetch each item by ID and extract fields from the detail response.
+/// Fetches all items concurrently for performance.
 async fn fetch_each_item(
     base_url: &str,
     fe: &crate::adapter::FetchEach,
     ids: &[String],
     headers: &HashMap<String, String>,
 ) -> Result<Vec<Value>> {
-    let mut items = Vec::with_capacity(ids.len());
     let base = base_url.trim_end_matches('/');
 
-    for id in ids {
-        let path = fe.url.replace("{id}", id);
-        let url = if path.starts_with("http://") || path.starts_with("https://") {
-            path
-        } else {
-            format!("{base}{path}")
-        };
+    // Build URLs for all IDs.
+    let urls: Vec<String> = ids
+        .iter()
+        .map(|id| {
+            let path = fe.url.replace("{id}", id);
+            if path.starts_with("http://") || path.starts_with("https://") {
+                path
+            } else {
+                format!("{base}{path}")
+            }
+        })
+        .collect();
 
-        let body = match fetch(&url, headers).await {
+    // Fetch all concurrently.
+    let fetches = urls.iter().map(|url| fetch(url, headers));
+    let results = futures::future::join_all(fetches).await;
+
+    // Extract fields from each response, preserving order.
+    let mut items = Vec::with_capacity(ids.len());
+    for result in results {
+        let body = match result {
             Ok(b) => b,
             Err(_) => continue,
         };

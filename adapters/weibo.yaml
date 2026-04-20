@@ -29,3 +29,35 @@ commands:
     headers:
       User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
       Referer: "https://weibo.com/"
+
+  search:
+    description: "搜索微博"
+    url: "/statuses/searchShow?q={query}&page=1&count={limit}"
+    format: json
+    selector: "data.cards"
+    fields:
+      text:
+        json_path: "mblog.text"
+        default: ""
+        transform: strip_html
+      user:
+        json_path: "mblog.user.screen_name"
+        default: ""
+      reposts:
+        json_path: "mblog.reposts_count"
+        default: "0"
+      comments:
+        json_path: "mblog.comments_count"
+        default: "0"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36"
+      Referer: "https://weibo.com/"

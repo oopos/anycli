@@ -25,3 +25,35 @@ commands:
         description: "Number of items to return"
     headers:
       User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"
+
+  search:
+    description: "知乎搜索"
+    url: "/search?q={query}&type=content&limit={limit}"
+    format: json
+    selector: "data"
+    fields:
+      title:
+        json_path: "highlight.title"
+        default: ""
+        transform: strip_html
+      description:
+        json_path: "highlight.description"
+        default: ""
+        transform: strip_html
+      type:
+        json_path: "type"
+        default: ""
+      url:
+        json_path: "object.url"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 20
+        description: "Number of results to return"
+    headers:
+      User-Agent: "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36"

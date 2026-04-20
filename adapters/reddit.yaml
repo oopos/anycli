@@ -56,6 +56,32 @@ commands:
     headers:
       User-Agent: "anycli/0.1"
 
+  frontpage:
+    description: "Posts from r/all — the frontpage of the internet"
+    url: "/r/all.json?limit={limit}"
+    format: json
+    selector: "data.children"
+    fields:
+      title:
+        json_path: "data.title"
+      subreddit:
+        json_path: "data.subreddit"
+      score:
+        json_path: "data.score"
+      author:
+        json_path: "data.author"
+      num_comments:
+        json_path: "data.num_comments"
+      url:
+        json_path: "data.url"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of posts to return"
+    headers:
+      User-Agent: "anycli/0.1"
+
   subreddit:
     description: "Posts from a specific subreddit"
     url: "/r/{name}/hot.json?limit={limit}"

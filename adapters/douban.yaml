@@ -85,3 +85,53 @@ commands:
         description: "Number of books to return"
     headers:
       Referer: "https://book.douban.com/"
+
+  top250:
+    description: "豆瓣电影 Top250"
+    url: "/search_subjects?type=movie&tag=豆瓣高分&sort=rank&page_limit={limit}&page_start={offset}"
+    format: json
+    selector: "subjects"
+    fields:
+      title:
+        json_path: "title"
+      rate:
+        json_path: "rate"
+      url:
+        json_path: "url"
+      id:
+        json_path: "id"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of movies to return"
+      offset:
+        type: integer
+        default: 0
+        description: "Offset for pagination"
+    headers:
+      Referer: "https://movie.douban.com/"
+
+  search:
+    description: "搜索豆瓣电影、图书或音乐"
+    url: "/subject_suggest?q={query}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      year:
+        json_path: "year"
+        default: ""
+      type:
+        json_path: "type"
+      id:
+        json_path: "id"
+      url:
+        json_path: "url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+    headers:
+      Referer: "https://movie.douban.com/"

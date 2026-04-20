@@ -1,5 +1,5 @@
 name: hackernews
-description: "Hacker News — top stories, new stories, and individual items"
+description: "Hacker News — top stories, new stories, best, ask, show, jobs, search, users, and individual items"
 base_url: "https://hacker-news.firebaseio.com/v0"
 version: "1.0.0"
 
@@ -76,3 +76,152 @@ commands:
         type: string
         required: true
         description: "Story ID"
+
+  best:
+    description: "Best stories on Hacker News"
+    url: "/beststories.json"
+    format: json
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
+        descendants:
+          json_path: "descendants"
+          default: "0"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of stories to return"
+
+  ask:
+    description: "Ask HN stories"
+    url: "/askstories.json"
+    format: json
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
+        descendants:
+          json_path: "descendants"
+          default: "0"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of stories to return"
+
+  show:
+    description: "Show HN stories"
+    url: "/showstories.json"
+    format: json
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
+        descendants:
+          json_path: "descendants"
+          default: "0"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of stories to return"
+
+  jobs:
+    description: "Job stories on Hacker News"
+    url: "/jobstories.json"
+    format: json
+    fields: {}
+    fetch_each:
+      url: "/item/{id}.json"
+      format: json
+      fields:
+        title:
+          json_path: "title"
+        url:
+          json_path: "url"
+        score:
+          json_path: "score"
+        by:
+          json_path: "by"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of job listings to return"
+
+  search:
+    description: "Search Hacker News stories via Algolia"
+    url: "https://hn.algolia.com/api/v1/search?query={query}&hitsPerPage={limit}"
+    format: json
+    selector: "hits"
+    fields:
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+        default: ""
+      points:
+        json_path: "points"
+      author:
+        json_path: "author"
+      id:
+        json_path: "objectID"
+      num_comments:
+        json_path: "num_comments"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results to return"
+
+  user:
+    description: "Get a Hacker News user profile"
+    url: "/user/{id}.json"
+    format: json
+    fields:
+      id:
+        json_path: "id"
+      karma:
+        json_path: "karma"
+      about:
+        json_path: "about"
+      submitted:
+        json_path: "submitted"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Username"

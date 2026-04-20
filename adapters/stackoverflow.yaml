@@ -77,3 +77,27 @@ commands:
         type: integer
         default: 20
         description: "Number of questions to return"
+
+  bounties:
+    description: "Questions with active bounties"
+    url: "/questions/featured?order=desc&sort=activity&site=stackoverflow&pagesize={limit}"
+    format: json
+    selector: "items"
+    fields:
+      title:
+        json_path: "title"
+      score:
+        json_path: "score"
+      answer_count:
+        json_path: "answer_count"
+      bounty_amount:
+        json_path: "bounty_amount"
+      link:
+        json_path: "link"
+      tags:
+        json_path: "tags"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of questions to return"
