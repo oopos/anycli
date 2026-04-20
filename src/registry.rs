@@ -25,6 +25,7 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("devto", include_str!("../adapters/devto.yaml")),
     ("lobsters", include_str!("../adapters/lobsters.yaml")),
     ("huggingface", include_str!("../adapters/huggingface.yaml")),
+    ("hf", include_str!("../adapters/huggingface.yaml")),
     ("steam", include_str!("../adapters/steam.yaml")),
     ("36kr", include_str!("../adapters/36kr.yaml")),
     ("medium", include_str!("../adapters/medium.yaml")),
@@ -117,6 +118,15 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("lazada", include_str!("../adapters/lazada.yaml")),
     ("shopee", include_str!("../adapters/shopee.yaml")),
     ("tiktokshop", include_str!("../adapters/tiktokshop.yaml")),
+    ("baidu-scholar", include_str!("../adapters/baidu-scholar.yaml")),
+    ("google-scholar", include_str!("../adapters/google-scholar.yaml")),
+    ("wanfang", include_str!("../adapters/wanfang.yaml")),
+    ("chaoxing", include_str!("../adapters/chaoxing.yaml")),
+    ("doubao-app", include_str!("../adapters/doubao-app.yaml")),
+    ("gov-law", include_str!("../adapters/gov-law.yaml")),
+    ("gov-policy", include_str!("../adapters/gov-policy.yaml")),
+    ("paperreview", include_str!("../adapters/paperreview.yaml")),
+    ("yollomi", include_str!("../adapters/yollomi.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.

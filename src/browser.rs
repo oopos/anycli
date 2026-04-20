@@ -128,6 +128,22 @@ impl BrowserFetcher for AgentBrowserFetcher {
     }
 }
 
+/// Strip rsclaw's status prefix lines (e.g. "Connected to existing Chrome\n")
+fn strip_rsclaw_prefix(s: &str) -> String {
+    let mut content_start = 0;
+    for line in s.lines() {
+        if line.starts_with("Connected to")
+            || line.starts_with("Navigated to")
+            || line.starts_with("Launched")
+        {
+            content_start += line.len() + 1;
+        } else {
+            break;
+        }
+    }
+    s[content_start.min(s.len())..].to_owned()
+}
+
 // ─── rsclaw browser backend ───────────────────────────────────────────────────
 
 async fn rsclaw_fetch(url: &str) -> Result<String> {
@@ -156,7 +172,9 @@ async fn rsclaw_fetch(url: &str) -> Result<String> {
         bail!("rsclaw browser content failed: {stderr}");
     }
 
-    String::from_utf8(content.stdout).context("output is not valid UTF-8")
+    let raw = String::from_utf8(content.stdout).context("output is not valid UTF-8")?;
+    // Strip "Connected to existing Chrome\n" prefix if present
+    Ok(strip_rsclaw_prefix(&raw))
 }
 
 async fn rsclaw_eval(url: &str, js: &str) -> Result<String> {
@@ -185,7 +203,18 @@ async fn rsclaw_eval(url: &str, js: &str) -> Result<String> {
         bail!("rsclaw browser evaluate failed: {stderr}");
     }
 
-    String::from_utf8(eval_output.stdout).context("output is not valid UTF-8")
+    let raw = String::from_utf8(eval_output.stdout).context("output is not valid UTF-8")?;
+
+    // rsclaw returns {"action":"evaluate","result":"..."} — extract the result field
+    if let Ok(v) = serde_json::from_str::<serde_json::Value>(&raw) {
+        if let Some(result) = v.get("result") {
+            return match result {
+                serde_json::Value::String(s) => Ok(s.clone()),
+                other => Ok(other.to_string()),
+            };
+        }
+    }
+    Ok(raw)
 }
 
 async fn rsclaw_intercept(url: &str, _pattern: &str) -> Result<String> {

@@ -1,0 +1,337 @@
+name: chaoxing
+description: "超星学习通 — 作业和考试列表（需要登录）"
+base_url: "https://mooc2-ans.chaoxing.com"
+version: "1.0.0"
+
+commands:
+  assignments:
+    description: "学习通作业列表"
+    url: "https://mooc2-ans.chaoxing.com/mooc2-ans/visit/interaction"
+    format: browser_api
+    timeout: 90
+    evaluate: |
+      (async () => {
+        // 1. Wait for session to establish
+        await new Promise(r => setTimeout(r, 3000));
+
+        // 2. Fetch course list via API
+        var resp = await fetch('https://mooc1-api.chaoxing.com/mycourse/backclazzdata?view=json&rss=1', { credentials: 'include' });
+        var data = await resp.json();
+        var channelList = (data && data.channelList) || [];
+        var courses = [];
+        for (var i = 0; i < channelList.length; i++) {
+          var content = channelList[i] && channelList[i].content;
+          if (!content) continue;
+          var courseData = content.course && content.course.data;
+          if (!Array.isArray(courseData)) continue;
+          for (var j = 0; j < courseData.length; j++) {
+            var c = courseData[j];
+            courses.push({
+              courseId: String(c.id || ''),
+              classId: String(content.id || ''),
+              cpi: String(channelList[i].cpi || ''),
+              title: String(c.name || '')
+            });
+          }
+        }
+        if (courses.length === 0) return JSON.stringify([{error: '未获取到课程列表，请确认已登录学习通'}]);
+
+        // 3. Filter by course name if provided
+        var courseFilter = '{course}';
+        if (courseFilter && courseFilter !== '' && courseFilter !== '{' + 'course}') {
+          courses = courses.filter(function(c) { return c.title.includes(courseFilter); });
+          if (courses.length === 0) return JSON.stringify([{error: '未找到匹配「' + courseFilter + '」的课程'}]);
+        }
+
+        // 4. Per-course: enter → click 作业 tab → navigate to iframe → parse
+        var allRows = [];
+        var limit = parseInt('{limit}') || 20;
+        for (var ci = 0; ci < courses.length; ci++) {
+          try {
+            // Enter course
+            var enterUrl = 'https://mooc1.chaoxing.com/visit/stucoursemiddle'
+              + '?courseid=' + courses[ci].courseId
+              + '&clazzid=' + courses[ci].classId
+              + '&cpi=' + courses[ci].cpi
+              + '&ismooc2=1&v=2';
+            window.location.href = enterUrl;
+            await new Promise(r => setTimeout(r, 4000));
+
+            // Click 作业 tab and get iframe URL
+            var tabs = document.querySelectorAll('a[data-url]');
+            var iframeSrc = '';
+            for (var ti = 0; ti < tabs.length; ti++) {
+              if ((tabs[ti].innerText || '').trim() === '作业') {
+                tabs[ti].click();
+                await new Promise(r => setTimeout(r, 2000));
+                var iframe = document.getElementById('frame_content-hd') || document.querySelector('iframe');
+                iframeSrc = iframe ? (iframe.src || '') : '';
+                break;
+              }
+            }
+            if (!iframeSrc) continue;
+
+            // Navigate to assignments page
+            window.location.href = iframeSrc;
+            await new Promise(r => setTimeout(r, 3000));
+
+            // Parse assignments from DOM
+            var blocks = document.querySelectorAll('.ulDiv li, .work-list-item, .listContent > div, ul > li');
+            for (var bi = 0; bi < blocks.length; bi++) {
+              var text = (blocks[bi].innerText || '').trim();
+              if (!text || text.length < 3) continue;
+              if (/^(全部|已完成|未完成|筛选|暂无|提交的作业将经过)/.test(text)) continue;
+
+              var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+              if (!lines.length) continue;
+
+              var title = lines[0].replace(/\s+/g, ' ').trim();
+              if (!title || /^(全部|已完成|未完成|筛选)$/.test(title)) continue;
+
+              var statusMatch = text.match(/(未交|待批阅|已完成|已批阅)/);
+              var status = statusMatch ? statusMatch[1] : '';
+
+              var remainMatch = text.match(/(剩余[\d天小时分钟秒]+)/);
+              var dateMatch = text.match(/(\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}(?:\s+\d{1,2}:\d{2})?)/);
+              var deadline = remainMatch ? remainMatch[1] : (dateMatch ? dateMatch[1] : '');
+
+              var scoreMatch = text.match(/(\d+(?:\.\d+)?)\s*分(?!钟)/);
+              var score = scoreMatch ? scoreMatch[1] : '';
+
+              allRows.push({
+                course: courses[ci].title,
+                title: title,
+                deadline: deadline,
+                status: status,
+                score: score
+              });
+            }
+          } catch(e) {
+            // Single course failure: skip
+          }
+          if (courses.length > 1) await new Promise(r => setTimeout(r, 600));
+        }
+
+        // 5. Sort: pending first
+        allRows.sort(function(a, b) {
+          var order = function(s) {
+            return s === '未交' ? 0 : s === '待批阅' ? 1 : s === '已完成' ? 2 : s === '已批阅' ? 3 : 4;
+          };
+          return order(a.status) - order(b.status);
+        });
+
+        // 6. Filter by status
+        var statusFilter = '{status}';
+        if (statusFilter && statusFilter !== 'all' && statusFilter !== '{' + 'status}') {
+          var statusMap = {
+            pending: ['未交'],
+            submitted: ['待批阅', '已完成'],
+            graded: ['已批阅']
+          };
+          var allowed = statusMap[statusFilter] || [];
+          allRows = allRows.filter(function(r) { return allowed.indexOf(r.status) >= 0; });
+        }
+
+        // 7. Add rank and limit
+        var result = allRows.slice(0, limit).map(function(item, i) {
+          return { rank: i + 1, course: item.course, title: item.title, deadline: item.deadline, status: item.status, score: item.score };
+        });
+        return JSON.stringify(result);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      course:
+        json_path: "course"
+      title:
+        json_path: "title"
+      deadline:
+        json_path: "deadline"
+      status:
+        json_path: "status"
+      score:
+        json_path: "score"
+    params:
+      course:
+        type: string
+        default: ""
+        description: "按课程名过滤（模糊匹配）"
+      status:
+        type: string
+        default: "all"
+        description: "按状态过滤: all, pending, submitted, graded"
+      limit:
+        type: integer
+        default: 20
+        description: "最大返回数量"
+
+  exams:
+    description: "学习通考试列表"
+    url: "https://mooc2-ans.chaoxing.com/mooc2-ans/visit/interaction"
+    format: browser_api
+    timeout: 90
+    evaluate: |
+      (async () => {
+        // 1. Wait for session to establish
+        await new Promise(r => setTimeout(r, 3000));
+
+        // 2. Fetch course list via API
+        var resp = await fetch('https://mooc1-api.chaoxing.com/mycourse/backclazzdata?view=json&rss=1', { credentials: 'include' });
+        var data = await resp.json();
+        var channelList = (data && data.channelList) || [];
+        var courses = [];
+        for (var i = 0; i < channelList.length; i++) {
+          var content = channelList[i] && channelList[i].content;
+          if (!content) continue;
+          var courseData = content.course && content.course.data;
+          if (!Array.isArray(courseData)) continue;
+          for (var j = 0; j < courseData.length; j++) {
+            var c = courseData[j];
+            courses.push({
+              courseId: String(c.id || ''),
+              classId: String(content.id || ''),
+              cpi: String(channelList[i].cpi || ''),
+              title: String(c.name || '')
+            });
+          }
+        }
+        if (courses.length === 0) return JSON.stringify([{error: '未获取到课程列表，请确认已登录学习通'}]);
+
+        // 3. Filter by course name if provided
+        var courseFilter = '{course}';
+        if (courseFilter && courseFilter !== '' && courseFilter !== '{' + 'course}') {
+          courses = courses.filter(function(c) { return c.title.includes(courseFilter); });
+          if (courses.length === 0) return JSON.stringify([{error: '未找到匹配「' + courseFilter + '」的课程'}]);
+        }
+
+        // 4. Per-course: enter → click 考试 tab → navigate to iframe → parse
+        var allRows = [];
+        var limit = parseInt('{limit}') || 20;
+        for (var ci = 0; ci < courses.length; ci++) {
+          try {
+            // Enter course
+            var enterUrl = 'https://mooc1.chaoxing.com/visit/stucoursemiddle'
+              + '?courseid=' + courses[ci].courseId
+              + '&clazzid=' + courses[ci].classId
+              + '&cpi=' + courses[ci].cpi
+              + '&ismooc2=1&v=2';
+            window.location.href = enterUrl;
+            await new Promise(r => setTimeout(r, 4000));
+
+            // Click 考试 tab and get iframe URL
+            var tabs = document.querySelectorAll('a[data-url]');
+            var iframeSrc = '';
+            for (var ti = 0; ti < tabs.length; ti++) {
+              if ((tabs[ti].innerText || '').trim() === '考试') {
+                tabs[ti].click();
+                await new Promise(r => setTimeout(r, 2000));
+                var iframe = document.getElementById('frame_content-hd') || document.querySelector('iframe');
+                iframeSrc = iframe ? (iframe.src || '') : '';
+                break;
+              }
+            }
+            if (!iframeSrc) continue;
+
+            // Navigate to exams page
+            window.location.href = iframeSrc;
+            await new Promise(r => setTimeout(r, 3000));
+
+            // Parse exams from DOM
+            var blocks = document.querySelectorAll('.ulDiv li, .exam-list-item, .listContent > div, ul > li');
+            for (var bi = 0; bi < blocks.length; bi++) {
+              var text = (blocks[bi].innerText || '').trim();
+              if (!text || text.length < 3) continue;
+              if (/^(全部|已完成|未完成|筛选|暂无)/.test(text)) continue;
+
+              // Skip "暂无考试"
+              if (text.includes('暂无考试')) continue;
+
+              var lines = text.split('\n').map(function(l) { return l.trim(); }).filter(Boolean);
+              if (!lines.length) continue;
+
+              var title = lines[0].replace(/\s+/g, ' ').trim();
+              if (!title || /^(全部|已完成|未完成|筛选)$/.test(title)) continue;
+
+              // Extract dates
+              var dates = text.match(/\d{4}[-\/.]\d{1,2}[-\/.]\d{1,2}\s+\d{1,2}:\d{2}/g) || [];
+              var start = dates[0] || '';
+              var end = dates[1] || '';
+
+              // Status
+              var statusMatch = text.match(/(未开始|进行中|已结束|已完成|未交|待批阅)/);
+              var status = statusMatch ? statusMatch[1] : '';
+              if (!status && text.includes('剩余')) status = '进行中';
+
+              // Score (exclude 分钟)
+              var scoreMatch = text.match(/(\d+(?:\.\d+)?)\s*分(?!钟)/);
+              var score = scoreMatch ? scoreMatch[1] : '';
+
+              allRows.push({
+                course: courses[ci].title,
+                title: title,
+                start: start,
+                end: end,
+                status: status,
+                score: score
+              });
+            }
+          } catch(e) {
+            // Single course failure: skip
+          }
+          if (courses.length > 1) await new Promise(r => setTimeout(r, 600));
+        }
+
+        // 5. Sort: upcoming first
+        allRows.sort(function(a, b) {
+          var order = function(s) {
+            return s === '未开始' ? 0 : s === '进行中' ? 1 : s === '已结束' ? 2 : s === '已完成' ? 3 : 4;
+          };
+          return order(a.status) - order(b.status);
+        });
+
+        // 6. Filter by status
+        var statusFilter = '{status}';
+        if (statusFilter && statusFilter !== 'all' && statusFilter !== '{' + 'status}') {
+          var statusMap = {
+            upcoming: ['未开始'],
+            ongoing: ['进行中'],
+            finished: ['已结束', '已完成']
+          };
+          var allowed = statusMap[statusFilter] || [];
+          allRows = allRows.filter(function(r) { return allowed.indexOf(r.status) >= 0; });
+        }
+
+        // 7. Add rank and limit
+        var result = allRows.slice(0, limit).map(function(item, i) {
+          return { rank: i + 1, course: item.course, title: item.title, start: item.start, end: item.end, status: item.status, score: item.score };
+        });
+        return JSON.stringify(result);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      course:
+        json_path: "course"
+      title:
+        json_path: "title"
+      start:
+        json_path: "start"
+      end:
+        json_path: "end"
+      status:
+        json_path: "status"
+      score:
+        json_path: "score"
+    params:
+      course:
+        type: string
+        default: ""
+        description: "按课程名过滤（模糊匹配）"
+      status:
+        type: string
+        default: "all"
+        description: "按状态过滤: all, upcoming, ongoing, finished"
+      limit:
+        type: integer
+        default: 20
+        description: "最大返回数量"

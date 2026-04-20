@@ -1,0 +1,188 @@
+name: doubao-app
+description: "Doubao Desktop App — Electron app control via CDP (--remote-debugging-port=9226)"
+base_url: "localhost"
+version: "1.0.0"
+
+commands:
+  status:
+    description: "Check CDP connection to Doubao desktop app"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      JSON.stringify({status: 'Connected', url: window.location.href, title: document.title})
+    fields:
+      status:
+        json_path: "status"
+      url:
+        json_path: "url"
+      title:
+        json_path: "title"
+    params: {}
+
+  read:
+    description: "Read chat history from Doubao desktop app"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const results = [];
+        const containers = document.querySelectorAll('[data-testid="message_content"]');
+        for (const container of containers) {
+          const textEl = container.querySelector('[data-testid="message_text_content"]');
+          if (!textEl) continue;
+          if (textEl.querySelector('[data-testid="indicator"]') ||
+              textEl.getAttribute('data-show-indicator') === 'true') continue;
+          const isUser = container.classList.contains('justify-end');
+          let text = '';
+          const children = textEl.querySelectorAll('div[dir]');
+          if (children.length > 0) {
+            text = Array.from(children).map(c => c.innerText || c.textContent || '').join('');
+          } else {
+            text = (textEl.innerText || textEl.textContent || '').trim();
+          }
+          if (!text) continue;
+          results.push({role: isUser ? 'User' : 'Assistant', text: text.substring(0, 2000)});
+        }
+        if (results.length === 0) return JSON.stringify([{role: 'System', text: 'No conversation found'}]);
+        return JSON.stringify(results);
+      })()
+    fields:
+      role:
+        json_path: "[].role"
+      text:
+        json_path: "[].text"
+    params: {}
+
+  send:
+    description: "Send a message to Doubao desktop app (fire-and-forget)"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        const text = `${{text}}`;
+        const textarea = document.querySelector('[data-testid="chat_input_input"]');
+        if (!textarea) return JSON.stringify({status: 'error', error: 'No textarea found'});
+        textarea.focus();
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+        if (setter) setter.call(textarea, text);
+        else textarea.value = text;
+        textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        textarea.dispatchEvent(new Event('change', {bubbles: true}));
+        setTimeout(() => {
+          const btn = document.querySelector('[data-testid="chat_input_send_button"]');
+          if (btn) btn.click();
+          else textarea.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+        }, 500);
+        return JSON.stringify({status: 'sent', text: text});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Message to send"
+
+  ask:
+    description: "Send a message and wait for Doubao AI response"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (async () => {
+        const text = `${{text}}`;
+        const timeout = parseInt('${{timeout}}') || 30;
+
+        const beforeCount = document.querySelectorAll('[data-testid="message_content"]').length;
+
+        // Inject text
+        const textarea = document.querySelector('[data-testid="chat_input_input"]');
+        if (!textarea) return JSON.stringify({error: 'No textarea found'});
+        textarea.focus();
+        const setter = Object.getOwnPropertyDescriptor(
+          window.HTMLTextAreaElement.prototype, 'value'
+        )?.set;
+        if (setter) setter.call(textarea, text);
+        else textarea.value = text;
+        textarea.dispatchEvent(new Event('input', {bubbles: true}));
+        textarea.dispatchEvent(new Event('change', {bubbles: true}));
+
+        await new Promise(r => setTimeout(r, 500));
+
+        // Click send
+        const btn = document.querySelector('[data-testid="chat_input_send_button"]');
+        if (btn) btn.click();
+        else textarea.dispatchEvent(new KeyboardEvent('keydown', {key: 'Enter', code: 'Enter', keyCode: 13, bubbles: true}));
+
+        // Poll for response
+        const startTime = Date.now();
+        let lastText = '';
+        let stableCount = 0;
+        while (Date.now() - startTime < timeout * 1000) {
+          await new Promise(r => setTimeout(r, 1000));
+          const msgs = document.querySelectorAll('[data-testid="message_content"]');
+          if (msgs.length <= beforeCount) continue;
+          const lastMsg = msgs[msgs.length - 1];
+          if (lastMsg.classList.contains('justify-end')) continue;
+          const textEl = lastMsg.querySelector('[data-testid="message_text_content"]');
+          if (!textEl) continue;
+          if (textEl.querySelector('[data-testid="indicator"]') ||
+              textEl.getAttribute('data-show-indicator') === 'true') continue;
+          let responseText = '';
+          const children = textEl.querySelectorAll('div[dir]');
+          if (children.length > 0) {
+            responseText = Array.from(children).map(c => c.innerText || c.textContent || '').join('');
+          } else {
+            responseText = (textEl.innerText || textEl.textContent || '').trim();
+          }
+          if (!responseText) continue;
+          if (responseText === lastText) {
+            stableCount++;
+            if (stableCount >= 2) return JSON.stringify({role: 'Assistant', text: responseText});
+          } else {
+            lastText = responseText;
+            stableCount = 0;
+          }
+        }
+        if (lastText) return JSON.stringify({role: 'Assistant', text: lastText});
+        return JSON.stringify({role: 'System', text: 'No response within ' + timeout + 's'});
+      })()
+    fields:
+      role:
+        json_path: "role"
+      text:
+        json_path: "text"
+    params:
+      text:
+        type: string
+        required: true
+        description: "Prompt to send"
+      timeout:
+        type: string
+        required: false
+        description: "Max seconds to wait for response (default: 30)"
+        default: "30"
+
+  new:
+    description: "Start a new chat in Doubao desktop app"
+    url: ""
+    format: desktop
+    cdp_target: "auto"
+    evaluate: |
+      (() => {
+        let btn = document.querySelector('[data-testid="new_chat_button"]');
+        if (btn) { btn.click(); return JSON.stringify({status: 'new conversation started'}); }
+        btn = document.querySelector('[data-testid="app-open-newChat"]');
+        if (btn) { btn.click(); return JSON.stringify({status: 'new conversation started (sidebar)'}); }
+        return JSON.stringify({status: 'error', error: 'Could not find new chat button'});
+      })()
+    fields:
+      status:
+        json_path: "status"
+    params: {}

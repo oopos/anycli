@@ -1,0 +1,259 @@
+name: yollomi
+description: "Yollomi AI — image & video generation platform (cookie auth)"
+base_url: "https://yollomi.com"
+version: "1.0.0"
+
+commands:
+  models:
+    description: "List available AI models (image, video, tool)"
+    format: static
+    params:
+      type:
+        type: string
+        default: "all"
+        choices: ["all", "image", "video", "tool"]
+        description: "Filter by model type"
+    columns: ["type", "model", "credits", "description"]
+    data:
+      # Image models (sorted by credits)
+      - { type: image, model: z-image-turbo, credits: 1, description: "Alibaba Qwen turbo (cheapest)" }
+      - { type: image, model: flux-schnell, credits: 2, description: "High-speed Flux generation" }
+      - { type: image, model: ideogram-v3-turbo, credits: 3, description: "Ideogram V3 Turbo" }
+      - { type: image, model: imagen-4-fast, credits: 3, description: "Google Imagen 4 Fast" }
+      - { type: image, model: seedream-4-5, credits: 4, description: "Seedream 4.5 (ByteDance)" }
+      - { type: image, model: seedream-5-lite, credits: 4, description: "Seedream 5 Lite — 2K/3K" }
+      - { type: image, model: flux, credits: 4, description: "Flux 1.1 Pro" }
+      - { type: image, model: nano-banana, credits: 4, description: "Google Nano Banana" }
+      - { type: image, model: flux-kontext-pro, credits: 4, description: "Flux Kontext Pro (img2img)" }
+      - { type: image, model: imagen-4-ultra, credits: 6, description: "Google Imagen 4 Ultra" }
+      - { type: image, model: nano-banana-2, credits: 7, description: "Google Nano Banana 2" }
+      - { type: image, model: stable-diffusion-3-5-large, credits: 7, description: "Stable Diffusion 3.5 Large" }
+      - { type: image, model: nano-banana-pro, credits: 15, description: "Nano Banana Pro" }
+      - { type: image, model: flux-2-pro, credits: 15, description: "Flux 2 Pro (premium)" }
+      # Video models (sorted by credits)
+      - { type: video, model: kling-v2-6-motion-control, credits: 7, description: "Kling v2.6 Motion Control" }
+      - { type: video, model: bytedance-seedance-1-pro-fast, credits: 8, description: "Seedance 1.0 Pro Fast" }
+      - { type: video, model: kling-2-1, credits: 9, description: "Kling 2.1" }
+      - { type: video, model: minimax-hailuo-2-3, credits: 9, description: "Hailuo 2.3" }
+      - { type: video, model: pixverse-5, credits: 9, description: "PixVerse 5" }
+      - { type: video, model: wan-2-5-t2v, credits: 9, description: "Wan 2.5 Text-to-Video" }
+      - { type: video, model: wan-2-5-i2v, credits: 9, description: "Wan 2.5 Image-to-Video" }
+      - { type: video, model: google-veo-3-fast, credits: 9, description: "Google Veo 3 Fast" }
+      - { type: video, model: google-veo-3-1-fast, credits: 9, description: "Google Veo 3.1 Fast" }
+      - { type: video, model: openai-sora-2, credits: 10, description: "Sora 2" }
+      - { type: video, model: google-veo-3, credits: 10, description: "Google Veo 3" }
+      - { type: video, model: google-veo-3-1, credits: 10, description: "Google Veo 3.1" }
+      - { type: video, model: wan-2-6-t2v, credits: 29, description: "Wan 2.6 T2V (premium)" }
+      - { type: video, model: wan-2-6-i2v, credits: 29, description: "Wan 2.6 I2V (premium)" }
+      # Tool models (sorted by credits)
+      - { type: tool, model: remove-bg, credits: 0, description: "Remove background (free)" }
+      - { type: tool, model: image-upscaler, credits: 1, description: "Enhance image resolution" }
+      - { type: tool, model: object-remover, credits: 3, description: "Remove unwanted objects" }
+      - { type: tool, model: face-swap, credits: 3, description: "Swap faces in photos" }
+      - { type: tool, model: virtual-try-on, credits: 3, description: "Try clothes on photos" }
+      - { type: tool, model: qwen-image-edit, credits: 3, description: "Edit image with text prompt" }
+      - { type: tool, model: qwen-image-edit-plus, credits: 3, description: "Advanced image editing" }
+      - { type: tool, model: photo-restoration, credits: 4, description: "Revive old/damaged photos" }
+      - { type: tool, model: ai-background-generator, credits: 5, description: "Generate custom backgrounds" }
+
+  generate:
+    description: "Generate images with AI (text-to-image or image-to-image)"
+    url: "https://yollomi.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const prompt = '{prompt}';
+        const model = '{model}' || 'z-image-turbo';
+        const ratio = '{ratio}' || '1:1';
+        const imageUrl = '{image}' || '';
+
+        const modelRoutes = {
+          'flux': '/api/ai/flux',
+          'flux-schnell': '/api/ai/flux-schnell',
+          'flux-2-pro': '/api/ai/flux-2-pro',
+          'flux-kontext-pro': '/api/ai/flux-kontext-pro',
+          'nano-banana': '/api/ai/nano-banana',
+          'nano-banana-pro': '/api/ai/nano-banana-pro',
+          'nano-banana-2': '/api/ai/nano-banana-2',
+          'z-image-turbo': '/api/ai/z-image-turbo',
+          'imagen-4-ultra': '/api/ai/imagen-4-ultra',
+          'imagen-4-fast': '/api/ai/imagen-4-fast',
+          'ideogram-v3-turbo': '/api/ai/ideogram-v3-turbo',
+          'stable-diffusion-3-5-large': '/api/ai/stable-diffusion-3-5-large',
+          'seedream-4-5': '/api/ai/seedream-4-5',
+          'seedream-5-lite': '/api/ai/seedream-5-lite',
+        };
+
+        const apiPath = modelRoutes[model];
+        if (!apiPath) return JSON.stringify([{ status: 'error', model: model, prompt: prompt, image_count: 0, image_urls: 'Unknown model. Use: ' + Object.keys(modelRoutes).join(', ') }]);
+
+        const dimMap = { '1:1': [1024,1024], '16:9': [1344,768], '9:16': [768,1344], '4:3': [1152,896], '3:4': [896,1152] };
+        const [w, h] = dimMap[ratio] || [1024, 1024];
+
+        let body;
+        if (model === 'z-image-turbo') {
+          body = { prompt, width: w, height: h, output_format: 'jpg', output_quality: 85, guidance_scale: 0, num_inference_steps: 8 };
+        } else if (model === 'flux-2-pro') {
+          body = { prompt, aspectRatio: ratio, outputNumber: 1 };
+          if (imageUrl) body.imageUrl = imageUrl;
+        } else if (model === 'flux-kontext-pro') {
+          body = { prompt, output_format: 'jpg' };
+          if (imageUrl) body.imageUrl = imageUrl;
+          if (ratio !== '1:1') body.aspect_ratio = ratio;
+        } else {
+          body = { prompt, aspect_ratio: ratio };
+          if (imageUrl) body.imageUrl = imageUrl;
+        }
+
+        try {
+          const res = await fetch(apiPath, {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            let detail = errText;
+            try { detail = JSON.parse(errText).error || JSON.parse(errText).message || errText; } catch {}
+            return JSON.stringify([{ status: 'error(' + res.status + ')', model: model, prompt: prompt.substring(0, 80), image_count: 0, image_urls: detail }]);
+          }
+          const data = await res.json();
+          const images = data.images || (data.image ? [data.image] : []);
+          if (!images.length) return JSON.stringify([{ status: 'empty', model: model, prompt: prompt.substring(0, 80), image_count: 0, image_urls: 'No images returned' }]);
+
+          const credits = data.remainingCredits !== undefined ? ' (credits left: ' + data.remainingCredits + ')' : '';
+          return JSON.stringify([{
+            status: 'success' + credits,
+            model: model,
+            prompt: prompt.substring(0, 80),
+            image_count: images.length,
+            image_urls: images.join('\n')
+          }]);
+        } catch (err) {
+          return JSON.stringify([{ status: 'error', model: model, prompt: prompt.substring(0, 80), image_count: 0, image_urls: err.message }]);
+        }
+      })()
+    fields:
+      status:
+        json_path: "status"
+      model:
+        json_path: "model"
+      prompt:
+        json_path: "prompt"
+      image_count:
+        json_path: "image_count"
+      image_urls:
+        json_path: "image_urls"
+    params:
+      prompt:
+        type: string
+        required: true
+        description: "Text prompt describing the image"
+      model:
+        type: string
+        default: "z-image-turbo"
+        description: "Model ID (z-image-turbo, flux-schnell, nano-banana, flux-2-pro, ...)"
+      ratio:
+        type: string
+        default: "1:1"
+        choices: ["1:1", "16:9", "9:16", "4:3", "3:4"]
+        description: "Aspect ratio"
+      image:
+        type: string
+        default: ""
+        description: "Input image URL for img2img (upload first)"
+
+  video:
+    description: "Generate videos with AI (text-to-video or image-to-video)"
+    url: "https://yollomi.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const prompt = '{prompt}';
+        const model = '{model}' || 'kling-2-1';
+        const ratio = '{ratio}' || '16:9';
+        const imageUrl = '{image}' || '';
+
+        const inputs = { aspect_ratio: ratio };
+        if (imageUrl) inputs.image = imageUrl;
+        const body = { modelId: model, prompt, inputs };
+
+        try {
+          const res = await fetch('/api/ai/video', {
+            method: 'POST',
+            headers: { 'Content-Type': 'application/json' },
+            credentials: 'include',
+            body: JSON.stringify(body),
+          });
+          if (!res.ok) {
+            const errText = await res.text();
+            let detail = errText;
+            try { detail = JSON.parse(errText).error || JSON.parse(errText).message || errText; } catch {}
+            return JSON.stringify([{ status: 'error(' + res.status + ')', model: model, prompt: prompt.substring(0, 80), video_url: detail }]);
+          }
+          const data = await res.json();
+          const videoUrl = data.video || '';
+          if (!videoUrl) return JSON.stringify([{ status: 'empty', model: model, prompt: prompt.substring(0, 80), video_url: 'No video returned' }]);
+
+          const credits = data.remainingCredits !== undefined ? ' (credits left: ' + data.remainingCredits + ')' : '';
+          return JSON.stringify([{
+            status: 'success' + credits,
+            model: model,
+            prompt: prompt.substring(0, 80),
+            video_url: videoUrl
+          }]);
+        } catch (err) {
+          return JSON.stringify([{ status: 'error', model: model, prompt: prompt.substring(0, 80), video_url: err.message }]);
+        }
+      })()
+    fields:
+      status:
+        json_path: "status"
+      model:
+        json_path: "model"
+      prompt:
+        json_path: "prompt"
+      video_url:
+        json_path: "video_url"
+    params:
+      prompt:
+        type: string
+        required: true
+        description: "Text prompt describing the video"
+      model:
+        type: string
+        default: "kling-2-1"
+        description: "Model (kling-2-1, openai-sora-2, google-veo-3-1, wan-2-5-t2v, ...)"
+      ratio:
+        type: string
+        default: "16:9"
+        choices: ["1:1", "16:9", "9:16", "4:3", "3:4"]
+        description: "Aspect ratio"
+      image:
+        type: string
+        default: ""
+        description: "Input image URL for image-to-video"
+
+  upload:
+    description: "Upload an image or video to Yollomi (returns URL for other commands)"
+    url: "https://yollomi.com"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const fileInput = '{file}';
+        return JSON.stringify([{
+          status: 'info',
+          message: 'File upload requires local file access. Use "opencli yollomi upload <file>" or upload manually at https://yollomi.com'
+        }]);
+      })()
+    fields:
+      status:
+        json_path: "status"
+      message:
+        json_path: "message"
+    params:
+      file:
+        type: string
+        required: true
+        description: "Local file path to upload (jpg, png, gif, webp, mp4, mov)"

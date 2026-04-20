@@ -1,0 +1,114 @@
+name: gov-policy
+description: "中国政府网 — 政策文件搜索与最新政策（需要浏览器渲染）"
+base_url: "https://www.gov.cn"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索中国政府网政策文件"
+    url: "https://sousuo.www.gov.cn/sousuo/search.shtml?code=17da70961a7&dataTypeId=107&searchWord={query}"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = Math.min(Math.max(parseInt('{limit}') || 10, 1), 20);
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+
+        // Wait for results to load
+        for (let i = 0; i < 30; i++) {
+          if (document.querySelectorAll('.basic_result_content .item, .js_basic_result_content .item').length > 0) break;
+          await wait(500);
+        }
+
+        const results = [];
+        for (const el of document.querySelectorAll('.basic_result_content .item, .js_basic_result_content .item')) {
+          const titleEl = el.querySelector('a.title, .title a, a.log-anchor');
+          const title = normalize(titleEl?.textContent).replace(/<[^>]+>/g, '');
+          if (!title || title.length < 4) continue;
+
+          let url = titleEl?.getAttribute('href') || '';
+          if (url && !url.startsWith('http')) url = 'https://www.gov.cn' + url;
+
+          const description = normalize(el.querySelector('.description')?.textContent).slice(0, 120);
+          const date = (el.textContent || '').match(/(\d{4}[-./]\d{1,2}[-./]\d{1,2})/)?.[1] || '';
+          results.push({ rank: results.length + 1, title, description, date, url });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      description:
+        json_path: "description"
+        default: ""
+      date:
+        json_path: "date"
+        default: ""
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量 (max 20)"
+
+  recent:
+    description: "国务院最新政策文件"
+    url: "https://www.gov.cn/zhengce/zuixin/index.htm"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = Math.min(Math.max(parseInt('{limit}') || 10, 1), 20);
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+
+        // Wait for list items to load
+        for (let i = 0; i < 20; i++) {
+          if (document.querySelector('.news_box li, .list li, .list_item, .news-list li')) break;
+          await wait(500);
+        }
+
+        const results = [];
+        for (const el of document.querySelectorAll('.news_box li, .list li, .list_item, .news-list li')) {
+          const titleEl = el.querySelector('a');
+          const title = normalize(titleEl?.textContent);
+          if (!title || title.length < 4) continue;
+
+          let url = titleEl?.getAttribute('href') || '';
+          if (url && !url.startsWith('http')) url = 'https://www.gov.cn' + url;
+
+          const date = (el.textContent || '').match(/(\d{4}[-./]\d{1,2}[-./]\d{1,2})/)?.[1] || '';
+          const source = normalize(el.querySelector('.source, .from')?.textContent);
+
+          results.push({ rank: results.length + 1, title, date, source, url });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      date:
+        json_path: "date"
+        default: ""
+      source:
+        json_path: "source"
+        default: ""
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量 (max 20)"

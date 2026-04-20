@@ -1,0 +1,141 @@
+name: gov-law
+description: "国家法律法规数据库 — 法律法规搜索与最新法规（需要浏览器渲染）"
+base_url: "https://flk.npc.gov.cn"
+version: "1.0.0"
+
+commands:
+  search:
+    description: "搜索国家法律法规数据库"
+    url: "https://flk.npc.gov.cn/index.html"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = Math.min(Math.max(parseInt('{limit}') || 10, 1), 20);
+        const query = '{query}';
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // Navigate via Vue Router
+        const app = document.querySelector('#app');
+        const router = app?.__vue_app__?.config?.globalProperties?.$router;
+        if (router) {
+          await router.push({ path: '/search', query: { searchWord: query } });
+        }
+        await wait(5000);
+
+        // Fill search input if not already populated
+        const input = document.querySelector('.el-input__inner');
+        if (input && !input.value) {
+          const setter = Object.getOwnPropertyDescriptor(window.HTMLInputElement.prototype, 'value').set;
+          setter.call(input, query);
+          input.dispatchEvent(new Event('input', { bubbles: true }));
+          input.dispatchEvent(new Event('change', { bubbles: true }));
+          await wait(300);
+          input.dispatchEvent(new KeyboardEvent('keydown', { key: 'Enter', keyCode: 13, bubbles: true }));
+          input.dispatchEvent(new KeyboardEvent('keyup', { key: 'Enter', keyCode: 13, bubbles: true }));
+        }
+        await wait(3000);
+
+        // Wait for results
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        for (let i = 0; i < 40; i++) {
+          if (document.querySelectorAll('.result-item').length > 0) break;
+          await wait(500);
+        }
+        const results = [];
+        for (const el of document.querySelectorAll('.result-item')) {
+          const title = normalize(el.querySelector('.title-content')?.textContent);
+          if (!title) continue;
+          const status = normalize(el.querySelector('[class*="status"]')?.textContent);
+          const publish_date = normalize(el.querySelector('.publish-time')?.textContent).replace(/^公布日期[：:]\s*/, '');
+          const type = normalize(el.querySelector('.type')?.textContent);
+          const department = normalize(el.querySelector('.department')?.textContent);
+          results.push({ rank: results.length + 1, title, status, publish_date, type, department });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      status:
+        json_path: "status"
+        default: ""
+      publish_date:
+        json_path: "publish_date"
+        default: ""
+      type:
+        json_path: "type"
+        default: ""
+      department:
+        json_path: "department"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "搜索关键词"
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量 (max 20)"
+
+  recent:
+    description: "最新法律法规"
+    url: "https://flk.npc.gov.cn/index.html"
+    format: browser_api
+    evaluate: |
+      (async () => {
+        const limit = Math.min(Math.max(parseInt('{limit}') || 10, 1), 20);
+        const wait = (ms) => new Promise(r => setTimeout(r, ms));
+
+        // Navigate via Vue Router to search page (no query = recent)
+        const app = document.querySelector('#app');
+        const router = app?.__vue_app__?.config?.globalProperties?.$router;
+        if (router) {
+          await router.push({ path: '/search', query: {} });
+        }
+        await wait(5000);
+
+        // Wait for results
+        const normalize = v => (v || '').replace(/\s+/g, ' ').trim();
+        for (let i = 0; i < 40; i++) {
+          if (document.querySelectorAll('.result-item').length > 0) break;
+          await wait(500);
+        }
+        const results = [];
+        for (const el of document.querySelectorAll('.result-item')) {
+          const title = normalize(el.querySelector('.title-content')?.textContent);
+          if (!title) continue;
+          const status = normalize(el.querySelector('[class*="status"]')?.textContent);
+          const publish_date = normalize(el.querySelector('.publish-time')?.textContent).replace(/^公布日期[：:]\s*/, '');
+          const type = normalize(el.querySelector('.type')?.textContent);
+          const department = normalize(el.querySelector('.department')?.textContent);
+          results.push({ rank: results.length + 1, title, status, publish_date, type, department });
+          if (results.length >= limit) break;
+        }
+        return JSON.stringify(results);
+      })()
+    fields:
+      rank:
+        json_path: "rank"
+      title:
+        json_path: "title"
+      status:
+        json_path: "status"
+        default: ""
+      publish_date:
+        json_path: "publish_date"
+        default: ""
+      type:
+        json_path: "type"
+        default: ""
+      department:
+        json_path: "department"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "返回结果数量 (max 20)"

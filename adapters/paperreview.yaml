@@ -1,0 +1,154 @@
+name: paperreview
+description: "paperreview.ai — 论文评审平台，提交论文获取AI评审反馈"
+base_url: "https://paperreview.ai"
+version: "1.0.0"
+
+commands:
+  review:
+    description: "Fetch a review by token"
+    url: "/api/review/{token}"
+    format: json
+    fields:
+      status:
+        json_path: "status"
+        default: "ready"
+      title:
+        json_path: "title"
+        default: ""
+      venue:
+        json_path: "venue"
+        default: ""
+      numerical_score:
+        json_path: "numerical_score"
+        default: ""
+      has_feedback:
+        json_path: "has_feedback"
+        default: ""
+      submission_date:
+        json_path: "submission_date"
+        default: ""
+      summary:
+        json_path: "sections.summary"
+        default: ""
+      strengths:
+        json_path: "sections.strengths"
+        default: ""
+      weaknesses:
+        json_path: "sections.weaknesses"
+        default: ""
+      questions:
+        json_path: "sections.questions"
+        default: ""
+      review_url:
+        template: "https://paperreview.ai/review?token={token}"
+    params:
+      token:
+        type: string
+        required: true
+        positional: true
+        description: "Review token returned by paperreview.ai"
+    headers:
+      Accept: "application/json"
+    timeout: 30
+
+  submit:
+    description: "Submit a PDF to paperreview.ai for review"
+    url: "/api/get-upload-url"
+    method: POST
+    format: json
+    content_type: "application/json"
+    body:
+      filename: "{pdf}"
+      venue: "{venue}"
+    fields:
+      status:
+        json_path: "status"
+        default: "submitted"
+      s3_key:
+        json_path: "s3_key"
+        default: ""
+      presigned_url:
+        json_path: "presigned_url"
+        default: ""
+      message:
+        json_path: "message"
+        default: ""
+    params:
+      pdf:
+        type: string
+        required: true
+        positional: true
+        description: "Path to the paper PDF"
+      email:
+        type: string
+        required: true
+        description: "Email address for the submission"
+      venue:
+        type: string
+        default: ""
+        description: "Optional target venue such as ICLR or NeurIPS"
+      dry-run:
+        type: bool
+        default: false
+        description: "Validate the input and stop before remote submission"
+      prepare-only:
+        type: bool
+        default: false
+        description: "Request an upload slot but stop before uploading the PDF"
+    headers:
+      Accept: "application/json"
+    timeout: 120
+
+  feedback:
+    description: "Submit feedback for a review"
+    url: "/api/feedback/{token}"
+    method: POST
+    format: json
+    content_type: "application/json"
+    body:
+      helpfulness: "{helpfulness}"
+      has_critical_error: "{critical-error}"
+      has_actionable_suggestions: "{actionable-suggestions}"
+      additional_comments: "{additional-comments}"
+    fields:
+      status:
+        json_path: "status"
+        default: "submitted"
+      token:
+        template: "{token}"
+      helpfulness:
+        template: "{helpfulness}"
+      critical_error:
+        template: "{critical-error}"
+      actionable_suggestions:
+        template: "{actionable-suggestions}"
+      message:
+        json_path: "message"
+        default: "Feedback submitted."
+    params:
+      token:
+        type: string
+        required: true
+        positional: true
+        description: "Review token returned by paperreview.ai"
+      helpfulness:
+        type: integer
+        required: true
+        description: "Helpfulness score from 1 to 5"
+      critical-error:
+        type: string
+        required: true
+        choices: ["yes", "no"]
+        description: "Whether the review contains a critical error"
+      actionable-suggestions:
+        type: string
+        required: true
+        choices: ["yes", "no"]
+        description: "Whether the review contains actionable suggestions"
+      additional-comments:
+        type: string
+        default: ""
+        description: "Optional free-text feedback"
+    headers:
+      Accept: "application/json"
+    timeout: 30
