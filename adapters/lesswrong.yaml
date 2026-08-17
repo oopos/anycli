@@ -11,6 +11,8 @@ commands:
     format: json
     headers:
       Content-Type: "application/json"
+      Origin: "https://www.lesswrong.com"
+      Referer: "https://www.lesswrong.com/"
     body:
       query: "{ posts(input: {terms: {view: \"top\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
     selector: "data.posts.results"
@@ -39,6 +41,8 @@ commands:
     format: json
     headers:
       Content-Type: "application/json"
+      Origin: "https://www.lesswrong.com"
+      Referer: "https://www.lesswrong.com/"
     body:
       query: "{ posts(input: {terms: {view: \"frontpage\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
     selector: "data.posts.results"
@@ -67,6 +71,8 @@ commands:
     format: json
     headers:
       Content-Type: "application/json"
+      Origin: "https://www.lesswrong.com"
+      Referer: "https://www.lesswrong.com/"
     body:
       query: "{ posts(input: {terms: {view: \"new\", limit: {limit}}}) { results { _id title user { displayName } baseScore commentCount slug } } }"
     selector: "data.posts.results"

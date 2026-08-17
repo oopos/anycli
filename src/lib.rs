@@ -29,5 +29,5 @@ pub use adapter::Adapter;
 pub use browser::{AgentBrowserFetcher, BrowserFetcher};
 pub use hub::Hub;
 pub use output::{set_color_enabled, OutputFormat};
-pub use pipeline::{Pipeline, PipelineResult};
+pub use pipeline::{set_verbose, Pipeline, PipelineResult};
 pub use registry::Registry;

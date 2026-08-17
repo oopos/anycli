@@ -1,6 +1,7 @@
 //! Pipeline engine — fetch, parse, extract, and format web data.
 
 use std::collections::HashMap;
+use std::sync::atomic::{AtomicBool, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -14,7 +15,19 @@ use crate::browser::{AgentBrowserFetcher, BrowserFetcher};
 use crate::output::OutputFormat;
 
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(30);
+const MAX_RETRIES: u32 = 3;
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
+
+static VERBOSE: AtomicBool = AtomicBool::new(false);
+
+/// Enable verbose request logging (`-v` / `ANYCLI_VERBOSE`).
+pub fn set_verbose(enabled: bool) {
+    VERBOSE.store(enabled, Ordering::Relaxed);
+}
+
+fn verbose_enabled() -> bool {
+    VERBOSE.load(Ordering::Relaxed) || std::env::var_os("ANYCLI_VERBOSE").is_some()
+}
 
 /// Result of executing an adapter command.
 #[derive(Debug, Clone, Serialize)]
@@ -284,6 +297,9 @@ fn build_client() -> Result<reqwest::Client> {
     Ok(reqwest::Client::builder()
         .timeout(REQUEST_TIMEOUT)
         .user_agent(USER_AGENT)
+        .gzip(true)
+        .brotli(true)
+        .deflate(true)
         .build()?)
 }
 
@@ -477,6 +493,55 @@ async fn fetch_with_client(
     content_type: Option<&str>,
     timeout: Option<Duration>,
 ) -> Result<String> {
+    let mut last_err: Option<anyhow::Error> = None;
+
+    for attempt in 0..MAX_RETRIES {
+        if verbose_enabled() {
+            let extra = if attempt > 0 {
+                format!(" (retry {attempt})")
+            } else {
+                String::new()
+            };
+            eprintln!("{method} {url}{extra}");
+        }
+
+        match fetch_once(client, url, headers, method, body, content_type, timeout).await {
+            Ok(text) => return Ok(text),
+            Err(e) => {
+                let retry = is_retryable(&e) && attempt + 1 < MAX_RETRIES;
+                last_err = Some(e);
+                if !retry {
+                    break;
+                }
+                tokio::time::sleep(Duration::from_millis(250 * 2u64.pow(attempt))).await;
+            }
+        }
+    }
+
+    Err(last_err.unwrap_or_else(|| anyhow::anyhow!("failed to fetch {url}")))
+}
+
+fn is_retryable(err: &anyhow::Error) -> bool {
+    let msg = format!("{err:#}");
+    msg.contains("HTTP 429")
+        || msg.contains("HTTP 500")
+        || msg.contains("HTTP 502")
+        || msg.contains("HTTP 503")
+        || msg.contains("HTTP 504")
+        || msg.contains("failed to fetch")
+        || msg.contains("timed out")
+        || msg.contains("error sending request")
+}
+
+async fn fetch_once(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+    method: &str,
+    body: Option<&Value>,
+    content_type: Option<&str>,
+    timeout: Option<Duration>,
+) -> Result<String> {
     let mut req = match method {
         "POST" => client.post(url),
         "PUT" => client.put(url),
@@ -490,11 +555,19 @@ async fn fetch_with_client(
     }
 
     let mut has_content_type = false;
+    let mut has_accept = false;
     for (k, v) in headers {
         if k.eq_ignore_ascii_case("content-type") {
             has_content_type = true;
         }
+        if k.eq_ignore_ascii_case("accept") {
+            has_accept = true;
+        }
         req = req.header(k.as_str(), v.as_str());
+    }
+
+    if !has_accept {
+        req = req.header("Accept", "application/json, text/html;q=0.9, */*;q=0.8");
     }
 
     if let Some(body) = body {
@@ -513,13 +586,19 @@ async fn fetch_with_client(
         .await
         .with_context(|| format!("failed to fetch {url}"))?;
     let status = resp.status();
+    let text = resp
+        .text()
+        .await
+        .with_context(|| format!("failed to read body from {url}"))?;
     if !status.is_success() {
-        bail!("HTTP {status} from {url}");
+        let snippet: String = text.chars().take(240).collect::<String>().replace('\n', " ");
+        if snippet.is_empty() {
+            bail!("HTTP {status} from {url}");
+        }
+        bail!("HTTP {status} from {url}: {snippet}");
     }
 
-    resp.text()
-        .await
-        .with_context(|| format!("failed to read body from {url}"))
+    Ok(text)
 }
 
 /// Extract items from an HTML page using regex patterns.
@@ -830,17 +909,27 @@ async fn fetch_each_item(
     let empty_params = HashMap::new();
 
     let mut items = Vec::with_capacity(ids.len());
+    let mut last_err: Option<anyhow::Error> = None;
+    let mut failures = 0usize;
     for result in results {
         let body = match result {
             Ok(b) => b,
-            Err(_) => continue,
+            Err(e) => {
+                failures += 1;
+                last_err = Some(e);
+                continue;
+            }
         };
 
         match fe.format {
             SourceFormat::Json => {
                 let root: Value = match serde_json::from_str(&body) {
                     Ok(v) => v,
-                    Err(_) => continue,
+                    Err(e) => {
+                        failures += 1;
+                        last_err = Some(e.into());
+                        continue;
+                    }
                 };
                 items.push(extract_object(&root, &fe.fields, &empty_params, items.len())?);
             }
@@ -853,6 +942,11 @@ async fn fetch_each_item(
                 items.push(Value::Object(obj));
             }
         }
+    }
+
+    if items.is_empty() && failures > 0 {
+        return Err(last_err.unwrap_or_else(|| anyhow::anyhow!("all fetch_each requests failed")))
+            .with_context(|| format!("all {failures} fetch_each requests failed"));
     }
 
     Ok(items)
@@ -1092,5 +1186,19 @@ commands:
         let items = extract_static(cmd, &params).unwrap();
         assert_eq!(items.len(), 1);
         assert_eq!(items[0]["model"], json!("flux"));
+    }
+
+    #[test]
+    fn retryable_errors() {
+        let e = anyhow::anyhow!("HTTP 503 from https://example.com");
+        assert!(is_retryable(&e));
+        let e = anyhow::anyhow!("HTTP 404 from https://example.com");
+        assert!(!is_retryable(&e));
+    }
+
+    #[test]
+    fn suggest_close_names() {
+        let hint = suggest("hackernew", ["hackernews", "wikipedia"].into_iter());
+        assert!(hint.contains("hackernews"));
     }
 }

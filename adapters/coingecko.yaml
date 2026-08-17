@@ -1,0 +1,59 @@
+name: coingecko
+description: "CoinGecko — cryptocurrency prices and market data"
+base_url: "https://api.coingecko.com/api/v3"
+version: "1.0.0"
+aliases: ["cg"]
+tags: ["crypto", "finance"]
+
+commands:
+  top:
+    description: "Top coins by market cap"
+    url: "/coins/markets?vs_currency={currency}&order=market_cap_desc&per_page={limit}&page=1"
+    format: json
+    fields:
+      rank:
+        json_path: "market_cap_rank"
+      id:
+        json_path: "id"
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      price:
+        json_path: "current_price"
+      change_24h:
+        json_path: "price_change_percentage_24h"
+      market_cap:
+        json_path: "market_cap"
+    params:
+      currency:
+        type: string
+        default: usd
+        description: "Quote currency (usd, cny, eur)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of coins"
+
+  coin:
+    description: "Details and USD price for a coin id (e.g. bitcoin)"
+    url: "/coins/{id}?localization=false&tickers=false&community_data=false&developer_data=false"
+    format: json
+    fields:
+      id:
+        json_path: "id"
+      symbol:
+        json_path: "symbol"
+      name:
+        json_path: "name"
+      price:
+        json_path: "market_data.current_price.usd"
+      change_24h:
+        json_path: "market_data.price_change_percentage_24h"
+      market_cap:
+        json_path: "market_data.market_cap.usd"
+    params:
+      id:
+        type: string
+        required: true
+        description: "Coin id (bitcoin, ethereum, solana)"

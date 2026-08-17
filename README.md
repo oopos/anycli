@@ -53,16 +53,26 @@ anycli bilibili hot --format markdown limit=10
 
 # Hugging Face alias
 anycli hf top limit=5 --fields id,likes
+
+# PubMed / CoinGecko / MDN / 掘金
+anycli pubmed search CRISPR limit=5
+anycli coingecko top
+anycli mdn search fetch
+anycli juejin hot
 ```
 
 ### List / inspect adapters
 
 ```bash
 anycli list
+anycli list --tag academic
 anycli list --format json
+anycli search crypto
 anycli info hackernews
 anycli hackernews --help
 anycli hackernews top --help
+anycli doctor
+anycli -v wikipedia search rust
 ```
 
 ### Community hub
@@ -74,9 +84,10 @@ anycli update
 anycli uninstall zhihu
 ```
 
-### Validate a custom adapter
+### Custom adapters
 
 ```bash
+anycli new mysite --url https://api.example.com
 anycli validate ~/.anycli/adapters/mysite.yaml
 ```
 
@@ -92,7 +103,7 @@ anycli completions fish
 
 100+ adapters covering news, video, academic search, shopping, finance, and desktop apps. Run `anycli list` for the current set.
 
-Public JSON APIs (no browser): `hackernews`, `github`, `arxiv`, `wikipedia`, `bilibili`, `reddit`, `devto`, `lobsters`, …
+Public JSON APIs (no browser): `hackernews`, `github`, `arxiv`, `wikipedia`, `pubmed`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, …
 
 HTML / browser adapters: `github-trending`, `xiaohongshu`, `youtube`, `douyin`, …
 

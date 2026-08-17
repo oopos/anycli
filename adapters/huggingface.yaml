@@ -28,3 +28,40 @@ commands:
         type: integer
         default: 20
         description: "Number of models to return"
+
+  models:
+    description: "Most downloaded models"
+    url: "/models?limit={limit}&sort=downloads&direction=-1"
+    format: json
+    fields:
+      id:
+        json_path: "id"
+      likes:
+        json_path: "likes"
+      downloads:
+        json_path: "downloads"
+      pipeline:
+        json_path: "pipeline_tag"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of models"
+
+  datasets:
+    description: "Most downloaded datasets"
+    url: "/datasets?limit={limit}&sort=downloads&direction=-1"
+    format: json
+    fields:
+      id:
+        json_path: "id"
+      likes:
+        json_path: "likes"
+      downloads:
+        json_path: "downloads"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of datasets"

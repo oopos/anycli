@@ -126,6 +126,11 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("gov-policy", include_str!("../adapters/gov-policy.yaml")),
     ("paperreview", include_str!("../adapters/paperreview.yaml")),
     ("yollomi", include_str!("../adapters/yollomi.yaml")),
+    ("juejin", include_str!("../adapters/juejin.yaml")),
+    ("pubmed", include_str!("../adapters/pubmed.yaml")),
+    ("coingecko", include_str!("../adapters/coingecko.yaml")),
+    ("mdn", include_str!("../adapters/mdn.yaml")),
+    ("dockerhub", include_str!("../adapters/dockerhub.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.
@@ -189,6 +194,20 @@ impl Registry {
         adapters.sort_by_key(|a| &a.name);
         adapters.dedup_by(|a, b| a.name == b.name);
         adapters
+    }
+
+    /// Search loaded adapters by name, alias, tag, or description.
+    pub fn search(&self, query: &str) -> Vec<&Adapter> {
+        let q = query.to_lowercase();
+        self.list()
+            .into_iter()
+            .filter(|a| {
+                a.name.to_lowercase().contains(&q)
+                    || a.description.to_lowercase().contains(&q)
+                    || a.aliases.iter().any(|alias| alias.to_lowercase().contains(&q))
+                    || a.tags.iter().any(|tag| tag.to_lowercase().contains(&q))
+            })
+            .collect()
     }
 
     /// Number of loaded adapters.
@@ -262,5 +281,16 @@ mod tests {
     fn unknown_adapter_errors() {
         let registry = Registry::load().expect("load");
         assert!(registry.find("nonexistent").is_err());
+    }
+
+    #[test]
+    fn search_matches_name_alias_and_description() {
+        let registry = Registry::load().expect("load");
+        let hits = registry.search("juejin");
+        assert!(hits.iter().any(|a| a.name == "juejin"));
+        let hits = registry.search("jj");
+        assert!(hits.iter().any(|a| a.name == "juejin"));
+        let hits = registry.search("biomedical");
+        assert!(hits.iter().any(|a| a.name == "pubmed"));
     }
 }

@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
 
 use anycli::adapter::Command;
-use anycli::{Hub, OutputFormat, Pipeline, Registry, set_color_enabled};
+use anycli::{Hub, OutputFormat, Pipeline, Registry, set_color_enabled, set_verbose};
 
 const META_COMMANDS: &[&str] = &[
     "run",
@@ -20,12 +20,17 @@ const META_COMMANDS: &[&str] = &[
     "uninstall",
     "validate",
     "completions",
+    "new",
+    "doctor",
     "help",
 ];
 
 #[derive(Parser)]
 #[command(name = "anycli", version, about = "Turn any website into structured CLI output")]
 struct Cli {
+    /// Print request URLs (also set ANYCLI_VERBOSE=1).
+    #[arg(short, long, global = true)]
+    verbose: bool,
     #[command(subcommand)]
     command: Commands,
 }
@@ -56,6 +61,9 @@ enum Commands {
         /// Output format: table or json.
         #[arg(long, short, default_value = "table")]
         format: String,
+        /// Filter by name, alias, tag, or description substring.
+        #[arg(long, short)]
+        tag: Option<String>,
     },
     /// Show details of a specific adapter.
     Info {
@@ -89,6 +97,19 @@ enum Commands {
         /// Target shell: bash, zsh, fish, powershell, elvish.
         shell: String,
     },
+    /// Scaffold a custom adapter YAML in ~/.anycli/adapters/.
+    New {
+        /// Adapter name (letters, digits, hyphen).
+        name: String,
+        /// Base URL for the adapter.
+        #[arg(long)]
+        url: Option<String>,
+        /// Overwrite an existing file.
+        #[arg(long)]
+        force: bool,
+    },
+    /// Check installation: adapters, user dir, browser backends.
+    Doctor,
 }
 
 #[tokio::main]
@@ -103,10 +124,12 @@ async fn run() -> Result<()> {
     let mut args: Vec<String> = std::env::args().collect();
 
     // `anycli hackernews top` is the same as `anycli run hackernews top`.
-    if args.len() >= 2 {
-        let first = args[1].as_str();
-        if !first.starts_with('-') && !META_COMMANDS.contains(&first) {
-            args.insert(1, "run".to_owned());
+    // Insert `run` before the first non-flag that isn't a meta-command, so
+    // `anycli -v wikipedia search rust` still works.
+    if let Some(i) = args.iter().skip(1).position(|a| !a.starts_with('-')) {
+        let idx = i + 1;
+        if !META_COMMANDS.contains(&args[idx].as_str()) {
+            args.insert(idx, "run".to_owned());
         }
     }
 
@@ -131,45 +154,19 @@ async fn run() -> Result<()> {
     }
 
     let cli = Cli::parse_from(args);
+    if cli.verbose {
+        set_verbose(true);
+    }
     let registry = Registry::load()?;
 
     match cli.command {
-        Commands::List { format } => {
-            let adapters = registry.list();
-            if format == "json" {
-                let rows: Vec<serde_json::Value> = adapters
-                    .iter()
-                    .map(|a| {
-                        serde_json::json!({
-                            "name": a.name,
-                            "description": a.description,
-                            "version": a.version,
-                            "aliases": a.aliases,
-                            "tags": a.tags,
-                            "commands": a.commands.len(),
-                        })
-                    })
-                    .collect();
-                println!("{}", serde_json::to_string_pretty(&rows)?);
+        Commands::List { format, tag } => {
+            let adapters = if let Some(ref tag) = tag {
+                registry.search(tag)
             } else {
-                println!(
-                    "{:<22} {:<8} {}",
-                    "ADAPTER", "CMDS", "DESCRIPTION"
-                );
-                println!(
-                    "{:<22} {:<8} {}",
-                    "-------", "----", "-----------"
-                );
-                for adapter in &adapters {
-                    println!(
-                        "{:<22} {:<8} {}",
-                        adapter.name,
-                        adapter.commands.len(),
-                        adapter.description
-                    );
-                }
-                println!("\n{} adapters", adapters.len());
-            }
+                registry.list()
+            };
+            print_adapter_list(&adapters, &format)?;
         }
 
         Commands::Info { adapter: name } => {
@@ -263,17 +260,37 @@ async fn run() -> Result<()> {
         }
 
         Commands::Search { query } => {
-            let hub = Hub::new()?;
-            let results = hub.search(&query).await?;
-            if results.is_empty() {
+            let local = registry.search(&query);
+            let hub_results = match Hub::new() {
+                Ok(hub) => hub.search(&query).await.unwrap_or_default(),
+                Err(_) => Vec::new(),
+            };
+
+            if local.is_empty() && hub_results.is_empty() {
                 println!("No adapters found for `{query}`");
             } else {
-                println!("{:<20} {}", "ADAPTER", "DESCRIPTION");
-                println!("{:<20} {}", "-------", "-----------");
-                for entry in &results {
-                    println!("{:<20} {}", entry.name, entry.description);
+                println!("{:<22} {:<8} {}", "ADAPTER", "SOURCE", "DESCRIPTION");
+                println!("{:<22} {:<8} {}", "-------", "------", "-----------");
+                let mut seen = std::collections::HashSet::new();
+                for adapter in &local {
+                    seen.insert(adapter.name.as_str());
+                    println!(
+                        "{:<22} {:<8} {}",
+                        adapter.name, "local", adapter.description
+                    );
                 }
-                println!("\nInstall: anycli install <name>");
+                for entry in &hub_results {
+                    if seen.contains(entry.name.as_str()) {
+                        continue;
+                    }
+                    println!(
+                        "{:<22} {:<8} {}",
+                        entry.name, "hub", entry.description
+                    );
+                }
+                if !hub_results.is_empty() {
+                    println!("\nInstall from hub: anycli install <name>");
+                }
             }
         }
 
@@ -355,6 +372,14 @@ async fn run() -> Result<()> {
             let mut cmd = Cli::command();
             generate(shell, &mut cmd, "anycli", &mut io::stdout());
         }
+
+        Commands::New { name, url, force } => {
+            create_adapter_scaffold(&name, url.as_deref(), force)?;
+        }
+
+        Commands::Doctor => {
+            run_doctor(&registry)?;
+        }
     }
 
     Ok(())
@@ -376,6 +401,11 @@ fn strip_output_flags(params: &[String]) -> (OutputFlags, Vec<String>) {
         let p = &params[i];
         if p == "--no-color" {
             flags.no_color = true;
+            i += 1;
+            continue;
+        }
+        if p == "--verbose" || p == "-v" {
+            set_verbose(true);
             i += 1;
             continue;
         }
@@ -467,6 +497,142 @@ fn parse_params(params: &[String], cmd: Option<&Command>) -> Vec<(String, String
     }
 
     parsed
+}
+
+fn print_adapter_list(adapters: &[&anycli::Adapter], format: &str) -> Result<()> {
+    if format == "json" {
+        let rows: Vec<serde_json::Value> = adapters
+            .iter()
+            .map(|a| {
+                serde_json::json!({
+                    "name": a.name,
+                    "description": a.description,
+                    "version": a.version,
+                    "aliases": a.aliases,
+                    "tags": a.tags,
+                    "commands": a.commands.len(),
+                })
+            })
+            .collect();
+        println!("{}", serde_json::to_string_pretty(&rows)?);
+        return Ok(());
+    }
+
+    println!("{:<22} {:<8} {}", "ADAPTER", "CMDS", "DESCRIPTION");
+    println!("{:<22} {:<8} {}", "-------", "----", "-----------");
+    for adapter in adapters {
+        println!(
+            "{:<22} {:<8} {}",
+            adapter.name,
+            adapter.commands.len(),
+            adapter.description
+        );
+    }
+    println!("\n{} adapters", adapters.len());
+    Ok(())
+}
+
+fn create_adapter_scaffold(name: &str, url: Option<&str>, force: bool) -> Result<()> {
+    if name.is_empty()
+        || !name
+            .chars()
+            .all(|c| c.is_ascii_alphanumeric() || c == '-' || c == '_')
+    {
+        bail!("adapter name must be alphanumeric with hyphens/underscores");
+    }
+    let dir = anycli::hub::default_adapters_dir()
+        .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?;
+    std::fs::create_dir_all(&dir)
+        .with_context(|| format!("failed to create {}", dir.display()))?;
+    let dest = dir.join(format!("{name}.yaml"));
+    if dest.exists() && !force {
+        bail!(
+            "{} already exists (pass --force to overwrite)",
+            dest.display()
+        );
+    }
+
+    let base = url.unwrap_or("https://api.example.com");
+    let yaml = format!(
+        r#"name: {name}
+description: "{name} adapter"
+base_url: "{base}"
+version: "0.1.0"
+tags: []
+
+commands:
+  search:
+    description: "Search {name}"
+    url: "/search?q={{query}}&limit={{limit}}"
+    format: json
+    selector: "data.items"
+    fields:
+      title:
+        json_path: "title"
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"
+"#
+    );
+
+    let adapter: anycli::Adapter = serde_yaml_ng::from_str(&yaml)
+        .context("internal error: generated adapter YAML is invalid")?;
+    let _ = adapter;
+    std::fs::write(&dest, yaml).with_context(|| format!("failed to write {}", dest.display()))?;
+    println!("Wrote {}", dest.display());
+    println!("Edit the file, then: anycli validate {}", dest.display());
+    println!("Try it: anycli {name} search query=hello");
+    Ok(())
+}
+
+fn run_doctor(registry: &Registry) -> Result<()> {
+    println!("anycli {}", env!("CARGO_PKG_VERSION"));
+    println!("adapters:   {} loaded", registry.list().len());
+
+    match anycli::hub::default_adapters_dir() {
+        Some(dir) => {
+            let count = if dir.is_dir() {
+                std::fs::read_dir(&dir)
+                    .map(|entries| {
+                        entries
+                            .filter_map(|e| e.ok())
+                            .filter(|e| {
+                                matches!(
+                                    e.path().extension().and_then(|x| x.to_str()),
+                                    Some("yaml") | Some("yml")
+                                )
+                            })
+                            .count()
+                    })
+                    .unwrap_or(0)
+            } else {
+                0
+            };
+            println!(
+                "user dir:   {} ({count} yaml)",
+                dir.display()
+            );
+        }
+        None => println!("user dir:   (home directory not found)"),
+    }
+
+    let browser = if anycli::browser::AgentBrowserFetcher::is_available() {
+        "available (rsclaw or agent-browser)"
+    } else {
+        "not found (JSON/HTML adapters still work)"
+    };
+    println!("browser:    {browser}");
+    println!("verbose:    anycli -v <adapter> <command>");
+    Ok(())
 }
 
 fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {

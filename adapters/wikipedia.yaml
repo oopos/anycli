@@ -49,3 +49,19 @@ commands:
         type: integer
         default: 10
         description: "Number of results"
+
+  random:
+    description: "Random Wikipedia article summary"
+    url: "/page/random/summary"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      description:
+        json_path: "description"
+      extract:
+        json_path: "extract"
+      thumbnail:
+        json_path: "thumbnail.source"
+      url:
+        json_path: "content_urls.desktop.page"

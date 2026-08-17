@@ -133,6 +133,18 @@
       "tags": []
     },
     {
+      "name": "coingecko",
+      "description": "CoinGecko — cryptocurrency prices and market data",
+      "version": "1.0.0",
+      "tags": [
+        "crypto",
+        "finance"
+      ],
+      "aliases": [
+        "cg"
+      ]
+    },
+    {
       "name": "coupang",
       "description": "Coupang — 쿠팡 상품 검색 (requires login)",
       "version": "1.0.0",
@@ -179,6 +191,18 @@
       "description": "Discord — desktop app control via CDP",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "dockerhub",
+      "description": "Docker Hub — search container images",
+      "version": "1.0.0",
+      "tags": [
+        "containers",
+        "packages"
+      ],
+      "aliases": [
+        "dh"
+      ]
     },
     {
       "name": "douban",
@@ -343,6 +367,19 @@
       "tags": []
     },
     {
+      "name": "juejin",
+      "description": "稀土掘金 — 推荐与热门技术文章",
+      "version": "1.0.0",
+      "tags": [
+        "tech",
+        "chinese",
+        "articles"
+      ],
+      "aliases": [
+        "jj"
+      ]
+    },
+    {
       "name": "ke",
       "description": "贝壳找房 — 二手房、租房、小区信息（需登录）",
       "version": "1.0.0",
@@ -395,6 +432,15 @@
       "description": "脉脉 — 职场社交人才搜索",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "mdn",
+      "description": "MDN Web Docs — search web platform documentation",
+      "version": "1.0.0",
+      "tags": [
+        "docs",
+        "web"
+      ]
     },
     {
       "name": "medium",
@@ -461,6 +507,16 @@
       "description": "Product Hunt — discover new tech products",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "pubmed",
+      "description": "PubMed / Europe PMC — search biomedical papers",
+      "version": "1.0.0",
+      "tags": [
+        "academic",
+        "papers",
+        "medical"
+      ]
     },
     {
       "name": "pypi",
