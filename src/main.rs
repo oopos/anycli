@@ -1,11 +1,27 @@
 //! AnyCLI — turn any website into structured CLI output.
 
+use std::io;
 use std::process;
 
-use anyhow::Result;
-use clap::{Parser, Subcommand};
+use anyhow::{Context, Result, bail};
+use clap::{CommandFactory, Parser, Subcommand};
+use clap_complete::{Shell, generate};
 
-use anycli::{Hub, OutputFormat, Pipeline, Registry};
+use anycli::adapter::Command;
+use anycli::{Hub, OutputFormat, Pipeline, Registry, set_color_enabled};
+
+const META_COMMANDS: &[&str] = &[
+    "run",
+    "list",
+    "info",
+    "search",
+    "install",
+    "update",
+    "uninstall",
+    "validate",
+    "completions",
+    "help",
+];
 
 #[derive(Parser)]
 #[command(name = "anycli", version, about = "Turn any website into structured CLI output")]
@@ -25,12 +41,22 @@ enum Commands {
         /// Parameters as key=value pairs (e.g., limit=10 query="rust").
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         params: Vec<String>,
-        /// Output format: table, json, md, yaml, csv.
+        /// Output format: table, json, md, yaml, csv, plain.
+        #[arg(long, short, default_value = "table")]
+        format: String,
+        /// Comma-separated field names to include (and their order).
+        #[arg(long)]
+        fields: Option<String>,
+        /// Disable ANSI colors in table output.
+        #[arg(long)]
+        no_color: bool,
+    },
+    /// List all available adapters.
+    List {
+        /// Output format: table or json.
         #[arg(long, short, default_value = "table")]
         format: String,
     },
-    /// List all available adapters.
-    List,
     /// Show details of a specific adapter.
     Info {
         /// Adapter name.
@@ -48,6 +74,21 @@ enum Commands {
     },
     /// Update all installed adapters from the hub.
     Update,
+    /// Uninstall a user-installed adapter.
+    Uninstall {
+        /// Adapter name to remove from ~/.anycli/adapters/.
+        name: String,
+    },
+    /// Validate an adapter YAML file.
+    Validate {
+        /// Path to a YAML adapter file.
+        path: String,
+    },
+    /// Generate shell completion script.
+    Completions {
+        /// Target shell: bash, zsh, fish, powershell, elvish.
+        shell: String,
+    },
 }
 
 #[tokio::main]
@@ -59,16 +100,26 @@ async fn main() {
 }
 
 async fn run() -> Result<()> {
-    // Intercept `anycli run <adapter> --help` and `--format` before clap parses.
-    let args: Vec<String> = std::env::args().collect();
+    let mut args: Vec<String> = std::env::args().collect();
+
+    // `anycli hackernews top` is the same as `anycli run hackernews top`.
+    if args.len() >= 2 {
+        let first = args[1].as_str();
+        if !first.starts_with('-') && !META_COMMANDS.contains(&first) {
+            args.insert(1, "run".to_owned());
+        }
+    }
+
+    // Intercept `anycli run <adapter> --help` before clap parses.
     if args.len() >= 3 && args[1] == "run" {
-        // Handle --help
         let has_help = args[2..].iter().any(|a| a == "--help" || a == "-h");
         if has_help {
             let registry = Registry::load()?;
             let adapter_name = &args[2];
             if let Ok(adapter) = registry.find(adapter_name) {
-                let cmd_name = args[3..].iter().find(|a| *a != "--help" && *a != "-h");
+                let cmd_name = args[3..]
+                    .iter()
+                    .find(|a| *a != "--help" && *a != "-h" && !a.starts_with('-'));
                 if let Some(cmd) = cmd_name {
                     print_command_help(adapter, cmd)?;
                 } else {
@@ -77,72 +128,47 @@ async fn run() -> Result<()> {
                 return Ok(());
             }
         }
-
-        // Extract --format / -f from args before clap (since trailing_var_arg eats it)
-        let mut format_override: Option<String> = None;
-        let mut filtered_args: Vec<String> = Vec::new();
-        let mut skip_next = false;
-        for (i, arg) in args.iter().enumerate() {
-            if skip_next { skip_next = false; continue; }
-            if arg == "--format" || arg == "-f" {
-                if let Some(val) = args.get(i + 1) {
-                    format_override = Some(val.clone());
-                    skip_next = true;
-                    continue;
-                }
-            }
-            if let Some(val) = arg.strip_prefix("--format=") {
-                format_override = Some(val.to_string());
-                continue;
-            }
-            filtered_args.push(arg.clone());
-        }
-
-        if format_override.is_some() {
-            // Re-run with filtered args + format injected as clap arg
-            let fmt = format_override.unwrap();
-            let registry = Registry::load()?;
-
-            // Parse adapter, command, params from filtered_args
-            // filtered_args: [binary, "run", adapter, command, ...params]
-            if filtered_args.len() >= 4 {
-                let adapter_name = &filtered_args[2];
-                let command = &filtered_args[3];
-                let params = &filtered_args[4..];
-
-                // Handle help
-                if command == "help" || command == "--help" || command == "-h" {
-                    let adapter = registry.find(adapter_name)?;
-                    print_adapter_help(adapter, params.first().map(|s| s.as_str()));
-                    return Ok(());
-                }
-
-                let adapter = registry.find(adapter_name)?;
-                let fmt: OutputFormat = fmt.parse()?;
-
-                let parsed = parse_params(&params.to_vec());
-
-                let param_refs: Vec<(&str, &str)> = parsed
-                    .iter()
-                    .map(|(k, v)| (k.as_str(), v.as_str()))
-                    .collect();
-
-                let result = Pipeline::execute(adapter, command, &param_refs).await?;
-                println!("{}", result.format(fmt)?);
-                return Ok(());
-            }
-        }
     }
 
-    let cli = Cli::parse();
+    let cli = Cli::parse_from(args);
     let registry = Registry::load()?;
 
     match cli.command {
-        Commands::List => {
-            println!("{:<20} {}", "ADAPTER", "DESCRIPTION");
-            println!("{:<20} {}", "-------", "-----------");
-            for adapter in registry.list() {
-                println!("{:<20} {}", adapter.name, adapter.description);
+        Commands::List { format } => {
+            let adapters = registry.list();
+            if format == "json" {
+                let rows: Vec<serde_json::Value> = adapters
+                    .iter()
+                    .map(|a| {
+                        serde_json::json!({
+                            "name": a.name,
+                            "description": a.description,
+                            "version": a.version,
+                            "aliases": a.aliases,
+                            "tags": a.tags,
+                            "commands": a.commands.len(),
+                        })
+                    })
+                    .collect();
+                println!("{}", serde_json::to_string_pretty(&rows)?);
+            } else {
+                println!(
+                    "{:<22} {:<8} {}",
+                    "ADAPTER", "CMDS", "DESCRIPTION"
+                );
+                println!(
+                    "{:<22} {:<8} {}",
+                    "-------", "----", "-----------"
+                );
+                for adapter in &adapters {
+                    println!(
+                        "{:<22} {:<8} {}",
+                        adapter.name,
+                        adapter.commands.len(),
+                        adapter.description
+                    );
+                }
+                println!("\n{} adapters", adapters.len());
             }
         }
 
@@ -153,6 +179,12 @@ async fn run() -> Result<()> {
             println!("Base URL:    {}", adapter.base_url);
             if !adapter.version.is_empty() {
                 println!("Version:     {}", adapter.version);
+            }
+            if !adapter.aliases.is_empty() {
+                println!("Aliases:     {}", adapter.aliases.join(", "));
+            }
+            if !adapter.tags.is_empty() {
+                println!("Tags:        {}", adapter.tags.join(", "));
             }
             println!("\nCommands:");
             for (cmd_name, cmd) in &adapter.commands {
@@ -175,10 +207,13 @@ async fn run() -> Result<()> {
             command,
             params,
             format,
+            fields,
+            no_color,
         } => {
             let adapter = registry.find(&name)?;
+            let (flags, raw_params) = strip_output_flags(&params);
+            set_color_enabled(!no_color && !flags.no_color);
 
-            // No command or help command → show adapter help
             let command = match command {
                 None => {
                     print_adapter_help(adapter, None);
@@ -188,27 +223,42 @@ async fn run() -> Result<()> {
             };
 
             if command == "help" || command == "--help" || command == "-h" {
-                print_adapter_help(adapter, params.first().map(|s| s.as_str()));
+                print_adapter_help(adapter, raw_params.first().map(|s| s.as_str()));
                 return Ok(());
             }
 
-            // Show command help: `anycli run <adapter> <cmd> --help`
-            if params.iter().any(|p| p == "--help" || p == "-h" || p == "help") {
+            if raw_params
+                .iter()
+                .any(|p| p == "--help" || p == "-h" || p == "help")
+            {
                 print_command_help(adapter, &command)?;
                 return Ok(());
             }
 
-            let fmt: OutputFormat = format.parse()?;
-
-            // Parse params: supports key=value, --key value, --key=value
-            let parsed = parse_params(&params);
+            let cmd = adapter.commands.get(&command);
+            let parsed = parse_params(&raw_params, cmd);
+            let fmt_str = flags.format.as_deref().unwrap_or(&format);
+            let fmt: OutputFormat = fmt_str.parse()?;
 
             let param_refs: Vec<(&str, &str)> = parsed
                 .iter()
                 .map(|(k, v)| (k.as_str(), v.as_str()))
                 .collect();
 
-            let result = Pipeline::execute(adapter, &command, &param_refs).await?;
+            let mut result = Pipeline::execute(adapter, &command, &param_refs).await?;
+
+            let fields = flags.fields.as_ref().or(fields.as_ref());
+            if let Some(fields) = fields {
+                let cols: Vec<String> = fields
+                    .split(',')
+                    .map(|s| s.trim().to_owned())
+                    .filter(|s| !s.is_empty())
+                    .collect();
+                if !cols.is_empty() {
+                    result.project_fields(&cols);
+                }
+            }
+
             println!("{}", result.format(fmt)?);
         }
 
@@ -242,28 +292,141 @@ async fn run() -> Result<()> {
             let (updated, total) = hub.update(&dir).await?;
             println!("Updated {updated}/{total} adapters");
         }
+
+        Commands::Uninstall { name } => {
+            let dir = anycli::hub::default_adapters_dir()
+                .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?;
+            let candidates = [
+                dir.join(format!("{name}.yaml")),
+                dir.join(format!("{name}.yml")),
+                dir.join(format!("{}.yaml", name.replace('-', "_"))),
+            ];
+            let path = candidates.into_iter().find(|p| p.exists());
+            match path {
+                Some(path) => {
+                    std::fs::remove_file(&path)
+                        .with_context(|| format!("failed to remove {}", path.display()))?;
+                    println!("Uninstalled `{name}` from {}", path.display());
+                }
+                None => bail!("adapter `{name}` is not installed in {}", dir.display()),
+            }
+        }
+
+        Commands::Validate { path } => {
+            let content = std::fs::read_to_string(&path)
+                .with_context(|| format!("failed to read {path}"))?;
+            let adapter: anycli::Adapter = serde_yaml_ng::from_str(&content)
+                .with_context(|| format!("invalid adapter YAML: {path}"))?;
+            if adapter.name.is_empty() {
+                bail!("adapter is missing a name");
+            }
+            if adapter.commands.is_empty() {
+                bail!("adapter `{}` has no commands", adapter.name);
+            }
+            for (cmd_name, cmd) in &adapter.commands {
+                if cmd.url.is_empty()
+                    && cmd.evaluate.is_none()
+                    && cmd.data.is_none()
+                    && cmd.format != anycli::adapter::SourceFormat::Desktop
+                    && cmd.format != anycli::adapter::SourceFormat::Static
+                {
+                    bail!("command `{cmd_name}` needs a url, evaluate script, or static data");
+                }
+                for (param_name, param) in &cmd.params {
+                    if param.required && param.default.is_some() {
+                        eprintln!(
+                            "warning: `{cmd_name}.{param_name}` is required but also has a default"
+                        );
+                    }
+                }
+            }
+            println!(
+                "ok: {} ({} command{})",
+                adapter.name,
+                adapter.commands.len(),
+                if adapter.commands.len() == 1 { "" } else { "s" }
+            );
+        }
+
+        Commands::Completions { shell } => {
+            let shell: Shell = shell
+                .parse()
+                .map_err(|_| anyhow::anyhow!("unknown shell `{shell}`. supported: bash, zsh, fish, powershell, elvish"))?;
+            let mut cmd = Cli::command();
+            generate(shell, &mut cmd, "anycli", &mut io::stdout());
+        }
     }
 
     Ok(())
+}
+
+#[derive(Default)]
+struct OutputFlags {
+    format: Option<String>,
+    fields: Option<String>,
+    no_color: bool,
+}
+
+/// Pull output-related flags out of trailing adapter params.
+fn strip_output_flags(params: &[String]) -> (OutputFlags, Vec<String>) {
+    let mut flags = OutputFlags::default();
+    let mut rest = Vec::new();
+    let mut i = 0;
+    while i < params.len() {
+        let p = &params[i];
+        if p == "--no-color" {
+            flags.no_color = true;
+            i += 1;
+            continue;
+        }
+        if p == "--format" || p == "-f" {
+            if let Some(val) = params.get(i + 1) {
+                flags.format = Some(val.clone());
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--format=") {
+            flags.format = Some(val.to_string());
+            i += 1;
+            continue;
+        }
+        if p == "--fields" {
+            if let Some(val) = params.get(i + 1) {
+                flags.fields = Some(val.clone());
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--fields=") {
+            flags.fields = Some(val.to_string());
+            i += 1;
+            continue;
+        }
+        rest.push(p.clone());
+        i += 1;
+    }
+    (flags, rest)
 }
 
 /// Parse params from multiple formats:
 /// - key=value
 /// - --key value
 /// - --key=value
-fn parse_params(params: &[String]) -> Vec<(String, String)> {
+/// - leftover positionals bound to `positional: true` params (or the single required param)
+fn parse_params(params: &[String], cmd: Option<&Command>) -> Vec<(String, String)> {
     let mut parsed = Vec::new();
+    let mut positionals = Vec::new();
     let mut i = 0;
     while i < params.len() {
         let p = &params[i];
         if let Some(rest) = p.strip_prefix("--") {
-            // --key=value
             if let Some((k, v)) = rest.split_once('=') {
                 parsed.push((k.to_owned(), v.to_owned()));
             } else {
-                // --key value
                 let key = rest.to_owned();
-                if i + 1 < params.len() && !params[i + 1].starts_with("--") {
+                if i + 1 < params.len() && !params[i + 1].starts_with("--") && !params[i + 1].contains('=')
+                {
                     i += 1;
                     parsed.push((key, params[i].clone()));
                 } else {
@@ -271,17 +434,42 @@ fn parse_params(params: &[String]) -> Vec<(String, String)> {
                 }
             }
         } else if let Some((k, v)) = p.split_once('=') {
-            // key=value
             parsed.push((k.to_owned(), v.to_owned()));
+        } else {
+            positionals.push(p.clone());
         }
-        // skip unrecognized positional args
         i += 1;
     }
+
+    if let Some(cmd) = cmd {
+        let used: std::collections::HashSet<&str> =
+            parsed.iter().map(|(k, _)| k.as_str()).collect();
+        let mut names: Vec<String> = cmd
+            .params
+            .iter()
+            .filter(|(n, p)| p.positional && !used.contains(n.as_str()))
+            .map(|(n, _)| n.clone())
+            .collect();
+        if names.is_empty() && positionals.len() == 1 {
+            names = cmd
+                .params
+                .iter()
+                .filter(|(n, p)| p.required && !used.contains(n.as_str()))
+                .map(|(n, _)| n.clone())
+                .take(1)
+                .collect();
+        }
+        for (i, val) in positionals.iter().enumerate() {
+            if let Some(name) = names.get(i) {
+                parsed.push((name.clone(), val.clone()));
+            }
+        }
+    }
+
     parsed
 }
 
 fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
-    // If a specific command is requested: `anycli run <adapter> help <command>`
     if let Some(cmd_name) = sub_command {
         if let Err(e) = print_command_help(adapter, cmd_name) {
             eprintln!("error: {e:#}");
@@ -289,8 +477,14 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
         return;
     }
 
-    println!("Usage: anycli run {} [options] <command> [params...]\n", adapter.name);
+    println!(
+        "Usage: anycli {} [options] <command> [params...]\n",
+        adapter.name
+    );
     println!("{}\n", adapter.description);
+    if !adapter.aliases.is_empty() {
+        println!("Aliases: {}\n", adapter.aliases.join(", "));
+    }
     println!("Commands:");
 
     let mut cmds: Vec<_> = adapter.commands.iter().collect();
@@ -319,32 +513,32 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
     }
 
     println!("\nOptions:");
-    println!("  -f, --format <fmt>         Output format: json, table, csv, markdown [default: json]");
+    println!(
+        "  -f, --format <fmt>         Output format: json, table, csv, markdown, yaml, plain [default: table]"
+    );
+    println!("      --fields <cols>        Comma-separated columns to include");
+    println!("      --no-color             Disable ANSI colors");
     println!("  -h, --help                 Display help for command");
     println!(
-        "\nRun 'anycli run {} help <command>' for more info on a specific command.",
+        "\nRun 'anycli {} help <command>' for more info on a specific command.",
         adapter.name
     );
 }
 
 fn print_command_help(adapter: &anycli::Adapter, cmd_name: &str) -> Result<()> {
-    let cmd = adapter
-        .commands
-        .get(cmd_name)
-        .ok_or_else(|| {
-            let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
-            anyhow::anyhow!(
-                "command `{}` not found in adapter `{}`. available: {}",
-                cmd_name,
-                adapter.name,
-                available.join(", ")
-            )
-        })?;
+    let cmd = adapter.commands.get(cmd_name).ok_or_else(|| {
+        let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
+        let hint = anycli::pipeline::suggest(cmd_name, available.iter().copied());
+        anyhow::anyhow!(
+            "command `{}` not found in adapter `{}`. available: {}{}",
+            cmd_name,
+            adapter.name,
+            available.join(", "),
+            hint
+        )
+    })?;
 
-    println!(
-        "Usage: anycli run {} {} [params...]\n",
-        adapter.name, cmd_name
-    );
+    println!("Usage: anycli {} {} [params...]\n", adapter.name, cmd_name);
     println!("{}\n", cmd.description);
 
     if cmd.params.is_empty() {
@@ -375,7 +569,41 @@ fn print_command_help(adapter: &anycli::Adapter, cmd_name: &str) -> Result<()> {
         .map(|(name, _)| format!("{name}=VALUE"))
         .collect::<Vec<_>>()
         .join(" ");
-    println!("  anycli run {} {} {}", adapter.name, cmd_name, example_params);
+    println!("  anycli {} {} {}", adapter.name, cmd_name, example_params);
 
     Ok(())
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+
+    #[test]
+    fn strip_format_from_trailing_args() {
+        let params = vec![
+            "query=rust".into(),
+            "--format".into(),
+            "json".into(),
+            "--fields".into(),
+            "title,url".into(),
+        ];
+        let (flags, rest) = strip_output_flags(&params);
+        assert_eq!(flags.format.as_deref(), Some("json"));
+        assert_eq!(flags.fields.as_deref(), Some("title,url"));
+        assert_eq!(rest, vec!["query=rust"]);
+    }
+
+    #[test]
+    fn parse_key_value_and_flags() {
+        let params = vec![
+            "query=rust cli".into(),
+            "--limit".into(),
+            "5".into(),
+            "--verbose".into(),
+        ];
+        let parsed = parse_params(&params, None);
+        assert!(parsed.iter().any(|(k, v)| k == "query" && v == "rust cli"));
+        assert!(parsed.iter().any(|(k, v)| k == "limit" && v == "5"));
+        assert!(parsed.iter().any(|(k, v)| k == "verbose" && v == "true"));
+    }
 }

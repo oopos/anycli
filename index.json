@@ -1,11 +1,706 @@
 {
   "adapters": [
-    {"name": "arxiv", "description": "arXiv — search and browse academic papers", "version": "1.0.0", "tags": ["academic", "papers"]},
-    {"name": "bilibili", "description": "Bilibili — hot videos, search, and rankings", "version": "1.0.0", "tags": ["video", "chinese"]},
-    {"name": "douban", "description": "Douban — movies, books, and music", "version": "1.0.0", "tags": ["movies", "books", "chinese"]},
-    {"name": "github-trending", "description": "GitHub Trending — trending repositories", "version": "1.0.1", "tags": ["github", "code"]},
-    {"name": "hackernews", "description": "Hacker News — top stories and items", "version": "1.0.0", "tags": ["news", "tech"]},
-    {"name": "v2ex", "description": "V2EX — tech community hot topics", "version": "1.0.0", "tags": ["forum", "tech", "chinese"]},
-    {"name": "wikipedia", "description": "Wikipedia — article summaries and search", "version": "1.0.0", "tags": ["encyclopedia"]}
+    {
+      "name": "1688",
+      "description": "1688 — 阿里巴巴批发平台商品搜索、详情、店铺信息（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "36kr",
+      "description": "36氪 — 科技商业资讯热榜（需要浏览器渲染）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "amazon",
+      "description": "Amazon — Product search, detail pages, and bestseller rankings (requires login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "antigravity",
+      "description": "Antigravity AI — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "apple-podcasts",
+      "description": "Apple Podcasts — search podcasts, list episodes, and browse top charts via iTunes API",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "arxiv",
+      "description": "arXiv — search and browse academic papers",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "baidu",
+      "description": "百度搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "baidu-scholar",
+      "description": "百度学术 — 学术论文搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "band",
+      "description": "Band — 群组社交平台，查看群组和帖子（需登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "barchart",
+      "description": "Barchart — US stock quotes and options chain data",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "bbc",
+      "description": "BBC News — world news via RSS",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "bilibili",
+      "description": "Bilibili — hot videos, search, and rankings",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "binance",
+      "description": "Binance — crypto trading pairs, prices, and market data",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "bloomberg",
+      "description": "Bloomberg — financial news via RSS",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "bluesky",
+      "description": "Bluesky — decentralized social network",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "boss",
+      "description": "BOSS直聘 — 招聘搜索与职位管理",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "chaoxing",
+      "description": "超星学习通 — 作业和考试列表（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "chatgpt",
+      "description": "ChatGPT — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "chatgpt-app",
+      "description": "ChatGPT Desktop App — native macOS control via osascript + CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "chatwise",
+      "description": "ChatWise — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "cnki",
+      "description": "中国知网 — 海外版论文搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "codex",
+      "description": "OpenAI Codex — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "coupang",
+      "description": "Coupang — 쿠팡 상품 검색 (requires login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "crates",
+      "description": "crates.io — search Rust crates",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "csdn",
+      "description": "CSDN — 中文技术博客搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "ctrip",
+      "description": "携程旅行 — 目的地、景区和酒店搜索联想",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "cursor",
+      "description": "Cursor — AI code editor (desktop app via CDP)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "devto",
+      "description": "DEV.to — developer community and blog platform",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "dictionary",
+      "description": "Free Dictionary — word definitions and synonyms",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "discord-app",
+      "description": "Discord — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "douban",
+      "description": "豆瓣 — 电影、图书、音乐评分与推荐",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "doubao",
+      "description": "Doubao - ByteDance AI chat assistant",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "doubao-app",
+      "description": "Doubao Desktop App — Electron app control via CDP (--remote-debugging-port=9226)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "douyin",
+      "description": "抖音 — 视频搜索和用户内容（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "eastmoney",
+      "description": "东方财富 — 热股榜排行",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "ebay",
+      "description": "eBay — Search products, view item details, and browse listings",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "exchange",
+      "description": "汇率查询 — 实时汇率 (exchangerate-api)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "facebook",
+      "description": "Facebook — news feed, search, and user profiles (requires login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "gemini",
+      "description": "Gemini - Google AI assistant",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "gitee",
+      "description": "Gitee — 中国代码托管平台",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "github",
+      "description": "GitHub — search repositories, users, and code",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "github-trending",
+      "description": "GitHub Trending — trending repositories and developers",
+      "version": "1.0.1",
+      "tags": []
+    },
+    {
+      "name": "google",
+      "description": "Google — search, news, suggestions, and trends",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "google-scholar",
+      "description": "Google Scholar — academic paper search",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "gov-law",
+      "description": "国家法律法规数据库 — 法律法规搜索与最新法规（需要浏览器渲染）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "gov-policy",
+      "description": "中国政府网 — 政策文件搜索与最新政策（需要浏览器渲染）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "grok",
+      "description": "Grok - xAI chat assistant",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "hackernews",
+      "description": "Hacker News — top stories, new stories, best, ask, show, jobs, search, users, and individual items",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "huggingface",
+      "description": "Hugging Face — AI models, datasets, and trending",
+      "version": "1.0.0",
+      "tags": [
+        "ai",
+        "models"
+      ],
+      "aliases": [
+        "hf"
+      ]
+    },
+    {
+      "name": "hupu",
+      "description": "虎扑 — 体育社区热帖、搜索和帖子详情",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "imdb",
+      "description": "IMDb — movies, TV shows, and ratings",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "instagram",
+      "description": "Instagram — explore, search, profiles (needs login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "jd",
+      "description": "京东 — 商品搜索和详情（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "jianyu",
+      "description": "剑鱼标讯 — 招标采购公告搜索（需登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "jike",
+      "description": "即刻 — 社交动态流、搜索、话题和用户动态",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "jimeng",
+      "description": "即梦AI — 文生图生成和历史记录（需登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "ke",
+      "description": "贝壳找房 — 二手房、租房、小区信息（需登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "kuaidi",
+      "description": "快递查询 — 包裹物流追踪",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "kuaishou",
+      "description": "快手 — 视频搜索和热门（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "lazada",
+      "description": "Lazada — Search products and browse deals on Southeast Asia's e-commerce marketplace",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "lesswrong",
+      "description": "LessWrong — top posts, frontpage, and new posts via GraphQL API",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "linkedin",
+      "description": "LinkedIn — job search and timeline (needs login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "linux-do",
+      "description": "linux.do — Linux 中文社区热门与最新话题（需登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "lobsters",
+      "description": "Lobsters — computing-focused link aggregation",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "maimai",
+      "description": "脉脉 — 职场社交人才搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "medium",
+      "description": "Medium — blog platform for developers and writers",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "mubu",
+      "description": "幕布 — 大纲文档列表、最近编辑和全局搜索（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "notebooklm",
+      "description": "Google NotebookLM — 笔记本列表和登录状态检查（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "notion",
+      "description": "Notion — desktop app control via CDP",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "nowcoder",
+      "description": "牛客网 — 热搜、趋势和搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "npm",
+      "description": "NPM — search JavaScript/Node.js packages",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "ones",
+      "description": "ONES 项目管理 — 我的工作项和工作项详情（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "oschina",
+      "description": "开源中国 — 技术资讯和项目搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "paperreview",
+      "description": "paperreview.ai — 论文评审平台，提交论文获取AI评审反馈",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "pixiv",
+      "description": "Pixiv — illustration rankings and search (requires login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "producthunt",
+      "description": "Product Hunt — discover new tech products",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "pypi",
+      "description": "PyPI — Python package info",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "quark",
+      "description": "夸克网盘 — 文件列表（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "reddit",
+      "description": "Reddit — frontpage of the internet",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "reuters",
+      "description": "Reuters — news search via internal API (requires login cookie)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "shopee",
+      "description": "Shopee — Search products and browse deals on Southeast Asia's leading e-commerce platform",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "sinablog",
+      "description": "新浪博客 — 热门文章、搜索和文章详情",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "sinafinance",
+      "description": "新浪财经 — 实时快讯和股票行情",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "smzdm",
+      "description": "什么值得买 — 搜索好价商品（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "spotify",
+      "description": "Spotify — 搜索、播放控制（需要 OAuth 认证，设置 SPOTIFY_CLIENT_ID 和 SPOTIFY_CLIENT_SECRET）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "stackoverflow",
+      "description": "Stack Overflow — programming Q&A",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "steam",
+      "description": "Steam — top sellers and featured games",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "substack",
+      "description": "Substack — search posts, browse feeds, and read newsletter archives",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "taobao",
+      "description": "淘宝 — 商品搜索（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "tdx",
+      "description": "通达信 — 热搜榜排行",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "ths",
+      "description": "同花顺 — 热股榜排行",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "tieba",
+      "description": "百度贴吧 — 热门话题",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "tiktok",
+      "description": "TikTok — explore trending videos, search, and view user profiles",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "tiktokshop",
+      "description": "TikTok Shop — Search and browse products on TikTok's e-commerce platform",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "toutiao",
+      "description": "今日头条 — 新闻资讯搜索和热榜",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "twitter",
+      "description": "Twitter/X — timeline, trending, search, profiles (needs login)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "uiverse",
+      "description": "Uiverse — 开源 UI 组件库，导出 HTML/CSS/React/Vue 代码",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "v2ex",
+      "description": "V2EX — 创意工作者社区，热门话题和最新讨论",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "wanfang",
+      "description": "万方数据 — 学术论文搜索",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "weather",
+      "description": "天气查询 — 当前天气和预报 (wttr.in)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "web",
+      "description": "通用网页阅读器 — 提取任意网页的主要内容",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "weibo",
+      "description": "微博 — 热搜榜和热门话题",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "weixin",
+      "description": "微信公众号 — 文章下载提取（需要在浏览器中可访问文章）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "weread",
+      "description": "微信读书 — 书籍搜索和排行",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "wikipedia",
+      "description": "Wikipedia — article summaries and search",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "xianyu",
+      "description": "闲鱼 — 二手商品搜索、商品详情（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "xiaoe",
+      "description": "小鹅通 — 已购课程列表和课程目录（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "xiaohongshu",
+      "description": "小红书 — 笔记搜索、用户内容和推荐（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "xiaoyuzhou",
+      "description": "小宇宙FM — 播客详情、单集详情、播客节目列表",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "xueqiu",
+      "description": "雪球 — 股票热帖和行情（需要浏览器渲染）",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "yahoo-finance",
+      "description": "Yahoo Finance — stock quotes with real-time price data",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "yollomi",
+      "description": "Yollomi AI — image & video generation platform (cookie auth)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "youtube",
+      "description": "YouTube — video search, info, and transcripts (needs login for some features)",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "yuanbao",
+      "description": "Yuanbao - Tencent AI chat assistant",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "zhihu",
+      "description": "知乎 — 中文问答社区，热门话题与推荐",
+      "version": "1.0.0",
+      "tags": []
+    },
+    {
+      "name": "zsxq",
+      "description": "知识星球 — 星球话题、搜索和最新动态（需要登录）",
+      "version": "1.0.0",
+      "tags": []
+    }
   ]
 }

@@ -1,9 +1,25 @@
 //! Output formatting — JSON, table, CSV, and Markdown.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::{Result, bail};
 use serde::Deserialize;
 
 use crate::pipeline::PipelineResult;
+
+static DISABLE_COLOR: AtomicBool = AtomicBool::new(false);
+
+/// Disable ANSI colors (honored by table output). Also respects `NO_COLOR`.
+pub fn set_color_enabled(enabled: bool) {
+    DISABLE_COLOR.store(!enabled, Ordering::Relaxed);
+}
+
+fn color_enabled() -> bool {
+    if DISABLE_COLOR.load(Ordering::Relaxed) {
+        return false;
+    }
+    std::env::var_os("NO_COLOR").is_none()
+}
 
 /// Supported output formats.
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq)]
@@ -88,7 +104,11 @@ fn format_table(result: &PipelineResult) -> Result<String> {
     for (i, key) in keys.iter().enumerate() {
         if i > 0 { out.push_str("│"); }
         let padded = pad_display(key, widths[i]);
-        out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
+        if color_enabled() {
+            out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
+        } else {
+            out.push_str(&format!(" {padded} "));
+        }
     }
     out.push_str("│\n");
 
@@ -106,7 +126,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
         for (i, val) in row.iter().enumerate() {
             if i > 0 { out.push_str("│"); }
             out.push(' ');
-            out.push_str(&pad_display(&truncate(val, widths[i]), widths[i]));
+            out.push_str(&pad_display(&truncate_display(val, widths[i]), widths[i]));
             out.push(' ');
         }
         out.push_str("│\n");
@@ -248,16 +268,31 @@ fn pad_display(s: &str, target_width: usize) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max {
-        s.to_owned()
-    } else if max > 3 {
-        let truncated: String = chars[..max - 3].iter().collect();
-        format!("{truncated}...")
-    } else {
-        chars[..max].iter().collect()
+fn truncate_display(s: &str, max: usize) -> String {
+    if display_width(s) <= max {
+        return s.to_owned();
     }
+    if max <= 3 {
+        let mut out = String::new();
+        for c in s.chars() {
+            let w = if is_wide_char(c) { 2 } else { 1 };
+            if display_width(&out) + w > max {
+                break;
+            }
+            out.push(c);
+        }
+        return out;
+    }
+    let target = max - 3;
+    let mut out = String::new();
+    for c in s.chars() {
+        let w = if is_wide_char(c) { 2 } else { 1 };
+        if display_width(&out) + w > target {
+            break;
+        }
+        out.push(c);
+    }
+    format!("{out}...")
 }
 
 fn csv_escape(s: &str) -> String {

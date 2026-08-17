@@ -9,7 +9,7 @@ use serde::Serialize;
 use serde_json::{Value, json};
 use tracing::debug;
 
-use crate::adapter::{Adapter, Command, FieldDef, SourceFormat, Transform};
+use crate::adapter::{Adapter, Command, FieldDef, ParamDef, SourceFormat, Transform};
 use crate::browser::{AgentBrowserFetcher, BrowserFetcher};
 use crate::output::OutputFormat;
 
@@ -34,18 +34,37 @@ impl PipelineResult {
     pub fn format(&self, fmt: OutputFormat) -> Result<String> {
         crate::output::format_result(self, fmt)
     }
+
+    /// Keep only the requested columns, in the given order.
+    pub fn project_fields(&mut self, fields: &[String]) {
+        for item in &mut self.items {
+            if let Value::Object(map) = item {
+                let mut next = serde_json::Map::new();
+                for key in fields {
+                    if let Some(val) = map.get(key) {
+                        next.insert(key.clone(), val.clone());
+                    }
+                }
+                *map = next;
+            }
+        }
+    }
 }
 
 /// The pipeline engine.
 pub struct Pipeline {
     browser: Option<Box<dyn BrowserFetcher>>,
+    client: reqwest::Client,
 }
 
 impl Pipeline {
     /// Create a pipeline with no browser support.
     /// `format: browser` adapters will use `agent-browser` CLI as fallback.
     pub fn new() -> Self {
-        Self { browser: None }
+        Self {
+            browser: None,
+            client: build_client().unwrap_or_else(|_| reqwest::Client::new()),
+        }
     }
 
     /// Create a pipeline with a custom browser fetcher.
@@ -53,6 +72,7 @@ impl Pipeline {
     pub fn with_browser(fetcher: impl BrowserFetcher + 'static) -> Self {
         Self {
             browser: Some(Box::new(fetcher)),
+            client: build_client().unwrap_or_else(|_| reqwest::Client::new()),
         }
     }
 
@@ -76,72 +96,101 @@ impl Pipeline {
         command_name: &str,
         params: &[(&str, &str)],
     ) -> Result<PipelineResult> {
-        let cmd = adapter
-            .commands
-            .get(command_name)
-            .with_context(|| {
-                let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
-                format!(
-                    "command `{}` not found in adapter `{}`. available: {}",
-                    command_name,
-                    adapter.name,
-                    available.join(", ")
-                )
-            })?;
+        let cmd = adapter.commands.get(command_name).with_context(|| {
+            let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
+            let hint = suggest(command_name, available.iter().copied());
+            format!(
+                "command `{}` not found in adapter `{}`. available: {}{}",
+                command_name,
+                adapter.name,
+                available.join(", "),
+                hint
+            )
+        })?;
 
-        let param_map: HashMap<&str, &str> = params.iter().copied().collect();
-
-        // Validate required params.
-        for (name, def) in &cmd.params {
-            if def.required && !param_map.contains_key(name.as_str()) {
-                bail!("required parameter `{name}` not provided");
-            }
-        }
+        let param_map = resolve_params(&cmd.params, params)?;
 
         // Build URL with param substitution.
         let url = build_url(&adapter.base_url, &cmd.url, &param_map, &cmd.params)?;
         debug!(url, adapter = adapter.name, command = command_name, "fetching");
 
-        // Fetch.
-        let body = match cmd.format {
+        let timeout = cmd.timeout.map(Duration::from_secs);
+        let method = http_method(cmd.method.as_deref(), cmd.body.is_some());
+        let body = cmd
+            .body
+            .as_ref()
+            .map(|b| substitute_json(b, &param_map));
+
+        // Fetch (or use inline static data).
+        let response_body = match cmd.format {
+            SourceFormat::Static => String::new(),
             SourceFormat::Browser => self.browser_fetch(&url).await?,
             SourceFormat::BrowserApi => {
-                let js = cmd.evaluate.as_deref()
+                let js = cmd
+                    .evaluate
+                    .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("browser_api format requires an 'evaluate' field"))?;
-                self.browser_eval(&url, js).await?
+                self.browser_eval(&url, &substitute_eval(js, &param_map))
+                    .await?
             }
             SourceFormat::Desktop => {
-                let js = cmd.evaluate.as_deref()
+                let js = cmd
+                    .evaluate
+                    .as_deref()
                     .ok_or_else(|| anyhow::anyhow!("desktop format requires an 'evaluate' field"))?;
                 let target = cmd.cdp_target.as_deref().unwrap_or("auto");
-                self.desktop_eval(target, js).await?
+                self.desktop_eval(target, &substitute_eval(js, &param_map))
+                    .await?
             }
             SourceFormat::Intercept => {
-                let pattern = cmd.intercept_pattern.as_deref()
-                    .ok_or_else(|| anyhow::anyhow!("intercept format requires an 'intercept_pattern' field"))?;
+                let pattern = cmd.intercept_pattern.as_deref().ok_or_else(|| {
+                    anyhow::anyhow!("intercept format requires an 'intercept_pattern' field")
+                })?;
                 self.browser_intercept(&url, pattern).await?
             }
-            _ => fetch(&url, &cmd.headers).await?,
+            _ => {
+                self.fetch(
+                    &url,
+                    &cmd.headers,
+                    method,
+                    body.as_ref(),
+                    cmd.content_type.as_deref(),
+                    timeout,
+                )
+                .await?
+            }
         };
 
         // Extract items.
-        let mut items = if let Some(ref fetch_each) = cmd.fetch_each {
-            // fetch_each mode: initial response is ID list, fetch each detail.
-            let ids = extract_id_list(&body, cmd)?;
+        let mut items = if cmd.format == SourceFormat::Static {
+            extract_static(cmd, &param_map)?
+        } else if let Some(ref fetch_each) = cmd.fetch_each {
+            let ids = extract_id_list(&response_body, cmd)?;
 
-            // Apply limit before fetching details.
             let limit = param_map
                 .get("limit")
                 .and_then(|s| s.parse::<usize>().ok())
                 .unwrap_or(ids.len());
             let ids = &ids[..limit.min(ids.len())];
 
-            fetch_each_item(&adapter.base_url, fetch_each, ids, &cmd.headers).await?
+            fetch_each_item(
+                &self.client,
+                &adapter.base_url,
+                fetch_each,
+                ids,
+                &cmd.headers,
+                timeout,
+            )
+            .await?
         } else {
             match cmd.format {
-                SourceFormat::Html | SourceFormat::Browser => extract_html(&body, cmd)?,
-                SourceFormat::Json | SourceFormat::BrowserApi | SourceFormat::Desktop | SourceFormat::Intercept => extract_json(&body, cmd)?,
-                SourceFormat::Xml => extract_xml(&body, cmd)?,
+                SourceFormat::Html | SourceFormat::Browser => extract_html(&response_body, cmd)?,
+                SourceFormat::Json
+                | SourceFormat::BrowserApi
+                | SourceFormat::Desktop
+                | SourceFormat::Intercept => extract_json(&response_body, cmd, &param_map)?,
+                SourceFormat::Xml => extract_xml(&response_body, cmd)?,
+                SourceFormat::Static => extract_static(cmd, &param_map)?,
             }
         };
 
@@ -161,6 +210,27 @@ impl Pipeline {
             items,
             count,
         })
+    }
+
+    async fn fetch(
+        &self,
+        url: &str,
+        headers: &HashMap<String, String>,
+        method: &str,
+        body: Option<&Value>,
+        content_type: Option<&str>,
+        timeout: Option<Duration>,
+    ) -> Result<String> {
+        fetch_with_client(
+            &self.client,
+            url,
+            headers,
+            method,
+            body,
+            content_type,
+            timeout,
+        )
+        .await
     }
 
     /// Fetch a URL using the browser (injected fetcher or agent-browser CLI fallback).
@@ -204,67 +274,252 @@ impl Pipeline {
     }
 }
 
-/// Build the full URL by substituting `{param}` placeholders.
-fn build_url(
-    base: &str,
-    path: &str,
-    params: &HashMap<&str, &str>,
-    defs: &HashMap<String, crate::adapter::ParamDef>,
-) -> Result<String> {
-    let mut url_path = path.to_owned();
+impl Default for Pipeline {
+    fn default() -> Self {
+        Self::new()
+    }
+}
 
-    // Substitute {param} placeholders.
-    for (key, val) in params {
-        let placeholder = format!("{{{key}}}");
-        url_path = url_path.replace(&placeholder, val);
+fn build_client() -> Result<reqwest::Client> {
+    Ok(reqwest::Client::builder()
+        .timeout(REQUEST_TIMEOUT)
+        .user_agent(USER_AGENT)
+        .build()?)
+}
+
+/// Merge defaults, apply overrides, and validate required params / choices.
+pub(crate) fn resolve_params(
+    defs: &indexmap::IndexMap<String, ParamDef>,
+    params: &[(&str, &str)],
+) -> Result<HashMap<String, String>> {
+    let mut map = HashMap::new();
+
+    for (name, def) in defs {
+        if let Some(ref default_val) = def.default {
+            map.insert(name.clone(), json_to_plain(default_val));
+        }
     }
 
-    // Apply defaults for remaining placeholders.
-    for (key, def) in defs {
-        let placeholder = format!("{{{key}}}");
-        if url_path.contains(&placeholder) {
-            if let Some(ref default_val) = def.default {
-                let s = match default_val {
-                    Value::String(s) => s.clone(),
-                    other => other.to_string(),
-                };
-                url_path = url_path.replace(&placeholder, &s);
+    for (key, val) in params {
+        map.insert((*key).to_owned(), (*val).to_owned());
+    }
+
+    for (name, def) in defs {
+        if def.required && !map.contains_key(name) {
+            bail!("required parameter `{name}` not provided");
+        }
+        if !def.choices.is_empty() {
+            if let Some(val) = map.get(name) {
+                if !def.choices.iter().any(|c| c == val) {
+                    bail!(
+                        "parameter `{name}` must be one of: {}",
+                        def.choices.join(", ")
+                    );
+                }
             }
         }
     }
 
-    // Check for unresolved placeholders.
-    if url_path.contains('{') {
-        bail!("unresolved placeholder in URL: {url_path}");
+    Ok(map)
+}
+
+fn json_to_plain(val: &Value) -> String {
+    match val {
+        Value::String(s) => s.clone(),
+        Value::Number(n) => n.to_string(),
+        Value::Bool(b) => b.to_string(),
+        Value::Null => String::new(),
+        other => other.to_string(),
+    }
+}
+
+fn http_method(method: Option<&str>, has_body: bool) -> &'static str {
+    match method.map(|m| m.to_ascii_uppercase()) {
+        Some(m) if m == "POST" => "POST",
+        Some(m) if m == "PUT" => "PUT",
+        Some(m) if m == "PATCH" => "PATCH",
+        Some(m) if m == "DELETE" => "DELETE",
+        Some(_) => "GET",
+        None if has_body => "POST",
+        None => "GET",
+    }
+}
+
+/// Build the full URL by substituting `{param}` placeholders.
+pub(crate) fn build_url(
+    base: &str,
+    path: &str,
+    params: &HashMap<String, String>,
+    defs: &indexmap::IndexMap<String, ParamDef>,
+) -> Result<String> {
+    let mut url_path = substitute_known(path, params, true);
+
+    // Apply defaults for remaining placeholders (already in params via resolve_params,
+    // but keep this for callers that skip resolve_params).
+    for (key, def) in defs {
+        let placeholder = format!("{{{key}}}");
+        if url_path.contains(&placeholder) {
+            if let Some(ref default_val) = def.default {
+                url_path = url_path.replace(&placeholder, &encode_url_value(&json_to_plain(default_val)));
+            }
+        }
+    }
+
+    // Check for unresolved *known-style* placeholders that still look like params.
+    if let Some(missing) = first_unresolved_param(&url_path, defs) {
+        bail!("unresolved placeholder `{{{missing}}}` in URL: {url_path}");
     }
 
     let base = base.trim_end_matches('/');
     if url_path.starts_with("http://") || url_path.starts_with("https://") {
         Ok(url_path)
+    } else if url_path.is_empty() {
+        Ok(base.to_owned())
     } else {
         Ok(format!("{base}{url_path}"))
     }
 }
 
-/// Fetch a URL and return the response body as text.
-async fn fetch(url: &str, headers: &HashMap<String, String>) -> Result<String> {
-    let client = reqwest::Client::builder()
-        .timeout(REQUEST_TIMEOUT)
-        .user_agent(USER_AGENT)
-        .build()?;
+fn first_unresolved_param(
+    url: &str,
+    defs: &indexmap::IndexMap<String, ParamDef>,
+) -> Option<String> {
+    for (key, _) in defs {
+        if url.contains(&format!("{{{key}}}")) {
+            return Some(key.clone());
+        }
+    }
+    None
+}
 
-    let mut req = client.get(url);
+/// Replace `{name}` for known params only (so GraphQL `{ posts { title } }` is left intact).
+fn substitute_known(input: &str, params: &HashMap<String, String>, encode: bool) -> String {
+    let mut out = input.to_owned();
+    // Longer keys first so `{limit}` is not partially eaten by a shorter name.
+    let mut keys: Vec<&String> = params.keys().collect();
+    keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
+    for key in keys {
+        let placeholder = format!("{{{key}}}");
+        if !out.contains(&placeholder) {
+            continue;
+        }
+        let value = if encode {
+            encode_url_value(&params[key])
+        } else {
+            params[key].clone()
+        };
+        out = out.replace(&placeholder, &value);
+    }
+    out
+}
+
+fn encode_url_value(val: &str) -> String {
+    if val.starts_with("http://") || val.starts_with("https://") {
+        val.to_owned()
+    } else {
+        urlencoding::encode(val).into_owned()
+    }
+}
+
+fn substitute_json(value: &Value, params: &HashMap<String, String>) -> Value {
+    match value {
+        Value::String(s) => {
+            let replaced = substitute_known(s, params, false);
+            if replaced == *s {
+                Value::String(s.clone())
+            } else if let Ok(n) = replaced.parse::<i64>() {
+                json!(n)
+            } else if let Ok(n) = replaced.parse::<f64>() {
+                json!(n)
+            } else {
+                Value::String(replaced)
+            }
+        }
+        Value::Array(arr) => Value::Array(arr.iter().map(|v| substitute_json(v, params)).collect()),
+        Value::Object(map) => {
+            let mut next = serde_json::Map::new();
+            for (k, v) in map {
+                next.insert(k.clone(), substitute_json(v, params));
+            }
+            Value::Object(next)
+        }
+        other => other.clone(),
+    }
+}
+
+/// Substitute `${{param}}` and `{param}` in browser/desktop JS snippets.
+pub(crate) fn substitute_eval(js: &str, params: &HashMap<String, String>) -> String {
+    let mut out = js.to_owned();
+    let mut keys: Vec<&String> = params.keys().collect();
+    keys.sort_by_key(|k| std::cmp::Reverse(k.len()));
+    for key in keys {
+        let escaped = js_escape(&params[key]);
+        out = out.replace(&format!("${{{{{key}}}}}"), &escaped);
+        out = out.replace(&format!("{{{key}}}"), &escaped);
+    }
+    out
+}
+
+fn js_escape(s: &str) -> String {
+    s.replace('\\', "\\\\")
+        .replace('\'', "\\'")
+        .replace('"', "\\\"")
+        .replace('\n', "\\n")
+        .replace('`', "\\`")
+}
+
+async fn fetch_with_client(
+    client: &reqwest::Client,
+    url: &str,
+    headers: &HashMap<String, String>,
+    method: &str,
+    body: Option<&Value>,
+    content_type: Option<&str>,
+    timeout: Option<Duration>,
+) -> Result<String> {
+    let mut req = match method {
+        "POST" => client.post(url),
+        "PUT" => client.put(url),
+        "PATCH" => client.patch(url),
+        "DELETE" => client.delete(url),
+        _ => client.get(url),
+    };
+
+    if let Some(t) = timeout {
+        req = req.timeout(t);
+    }
+
+    let mut has_content_type = false;
     for (k, v) in headers {
+        if k.eq_ignore_ascii_case("content-type") {
+            has_content_type = true;
+        }
         req = req.header(k.as_str(), v.as_str());
     }
 
-    let resp = req.send().await.with_context(|| format!("failed to fetch {url}"))?;
+    if let Some(body) = body {
+        if let Some(ct) = content_type {
+            if !has_content_type {
+                req = req.header("Content-Type", ct);
+            }
+        } else if !has_content_type {
+            req = req.header("Content-Type", "application/json");
+        }
+        req = req.json(body);
+    }
+
+    let resp = req
+        .send()
+        .await
+        .with_context(|| format!("failed to fetch {url}"))?;
     let status = resp.status();
     if !status.is_success() {
         bail!("HTTP {status} from {url}");
     }
 
-    resp.text().await.with_context(|| format!("failed to read body from {url}"))
+    resp.text()
+        .await
+        .with_context(|| format!("failed to read body from {url}"))
 }
 
 /// Extract items from an HTML page using regex patterns.
@@ -272,7 +527,9 @@ fn extract_html(html: &str, cmd: &Command) -> Result<Vec<Value>> {
     let blocks = if let Some(ref selector) = cmd.selector {
         let re = Regex::new(&format!("(?s){selector}"))
             .with_context(|| format!("invalid selector regex: {selector}"))?;
-        re.find_iter(html).map(|m| m.as_str().to_owned()).collect::<Vec<_>>()
+        re.find_iter(html)
+            .map(|m| m.as_str().to_owned())
+            .collect::<Vec<_>>()
     } else {
         vec![html.to_owned()]
     };
@@ -322,15 +579,76 @@ fn extract_field_html(block: &str, def: &FieldDef) -> Result<Value> {
     }
 }
 
-/// Extract items from a JSON response.
-fn extract_json(body: &str, cmd: &Command) -> Result<Vec<Value>> {
-    let root: Value = serde_json::from_str(body).context("invalid JSON response")?;
+/// Return inline YAML `data` for static commands, optionally filtered by params.
+fn extract_static(cmd: &Command, params: &HashMap<String, String>) -> Result<Vec<Value>> {
+    let data = cmd.data.clone().unwrap_or(json!([]));
+    let mut items = match data {
+        Value::Array(arr) => arr,
+        other => vec![other],
+    };
 
-    // If selector is provided, use it as a JSON path to find the array.
+    if !cmd.fields.is_empty() {
+        let mut projected = Vec::with_capacity(items.len());
+        for (index, element) in items.iter().enumerate() {
+            projected.push(extract_object(element, &cmd.fields, params, index)?);
+        }
+        items = projected;
+    } else if !cmd.columns.is_empty() {
+        items = items
+            .into_iter()
+            .map(|item| {
+                if let Value::Object(map) = item {
+                    let mut next = serde_json::Map::new();
+                    for col in &cmd.columns {
+                        if let Some(val) = map.get(col) {
+                            next.insert(col.clone(), val.clone());
+                        }
+                    }
+                    Value::Object(next)
+                } else {
+                    item
+                }
+            })
+            .collect();
+    }
+
+    for (key, val) in params {
+        if key == "limit" || val.eq_ignore_ascii_case("all") {
+            continue;
+        }
+        if !cmd.params.contains_key(key) {
+            continue;
+        }
+        items.retain(|item| match item.get(key) {
+            Some(v) => json_to_plain(v) == *val,
+            None => true,
+        });
+    }
+
+    Ok(items)
+}
+
+/// Extract items from a JSON response.
+fn extract_json(
+    body: &str,
+    cmd: &Command,
+    params: &HashMap<String, String>,
+) -> Result<Vec<Value>> {
+    let root: Value = serde_json::from_str(body).context("invalid JSON response")?;
+    extract_json_value(&root, cmd, params)
+}
+
+fn extract_json_value(
+    root: &Value,
+    cmd: &Command,
+    params: &HashMap<String, String>,
+) -> Result<Vec<Value>> {
     let array = if let Some(ref selector) = cmd.selector {
-        navigate_json(&root, selector)
-            .and_then(|v| v.as_array().cloned())
-            .unwrap_or_default()
+        match navigate_json(root, selector) {
+            Some(Value::Array(arr)) => arr.clone(),
+            Some(other) => vec![other.clone()],
+            None => Vec::new(),
+        }
     } else if let Some(arr) = root.as_array() {
         arr.clone()
     } else {
@@ -338,47 +656,85 @@ fn extract_json(body: &str, cmd: &Command) -> Result<Vec<Value>> {
     };
 
     let mut items = Vec::with_capacity(array.len());
-    for element in &array {
-        let mut obj = serde_json::Map::new();
-        for (field_name, field_def) in &cmd.fields {
-            let val = extract_field_json(element, field_def)?;
-            obj.insert(field_name.clone(), val);
-        }
-        items.push(Value::Object(obj));
+    for (index, element) in array.iter().enumerate() {
+        items.push(extract_object(element, &cmd.fields, params, index)?);
     }
 
     Ok(items)
 }
 
-/// Extract a single field from a JSON element.
-fn extract_field_json(element: &Value, def: &FieldDef) -> Result<Value> {
-    if let Some(ref path) = def.json_path {
-        let val = navigate_json(element, path);
-        match val {
-            Some(v) if !v.is_null() => Ok(v.clone()),
-            _ => match &def.default {
-                Some(d) => Ok(json!(d)),
-                None => Ok(Value::Null),
-            },
+fn extract_object(
+    element: &Value,
+    fields: &indexmap::IndexMap<String, FieldDef>,
+    params: &HashMap<String, String>,
+    index: usize,
+) -> Result<Value> {
+    let mut obj = serde_json::Map::new();
+
+    for (field_name, field_def) in fields {
+        if field_def.template.is_some() && field_def.json_path.is_none() && field_def.alt_paths.is_empty()
+        {
+            continue;
         }
-    } else {
-        Ok(match &def.default {
-            Some(d) => json!(d),
-            None => Value::Null,
-        })
+        let val = extract_field_json(element, field_def, index)?;
+        obj.insert(field_name.clone(), val);
     }
+
+    for (field_name, field_def) in fields {
+        if let Some(ref tpl) = field_def.template {
+            let rendered = render_template(tpl, element, &obj, params);
+            obj.insert(field_name.clone(), Value::String(rendered));
+        }
+    }
+
+    Ok(Value::Object(obj))
+}
+
+/// Extract a single field from a JSON element.
+fn extract_field_json(element: &Value, def: &FieldDef, index: usize) -> Result<Value> {
+    let mut paths: Vec<&str> = Vec::new();
+    if let Some(ref path) = def.json_path {
+        paths.push(path.as_str());
+    }
+    for path in &def.alt_paths {
+        paths.push(path.as_str());
+    }
+
+    for path in paths {
+        if path == "@index" {
+            return Ok(apply_transform_value(json!(index), &def.transform));
+        }
+        if let Some(v) = navigate_json(element, path) {
+            if !v.is_null() {
+                return Ok(apply_transform_value(v.clone(), &def.transform));
+            }
+        }
+    }
+
+    Ok(match &def.default {
+        Some(d) => apply_transform_value(json!(d), &def.transform),
+        None => Value::Null,
+    })
 }
 
 /// Navigate a JSON value by dot-separated path (e.g., "data.items" or "title").
-fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
+/// `[]` segments are no-ops so `[].eid` reads `eid` on the current item.
+pub(crate) fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
+    if path.is_empty() || path == "[]" {
+        return Some(val);
+    }
     let mut current = val;
     for segment in path.split('.') {
+        if segment.is_empty() || segment == "[]" {
+            continue;
+        }
+        let key = segment.strip_suffix("[]").unwrap_or(segment);
         match current {
             Value::Object(map) => {
-                current = map.get(segment)?;
+                current = map.get(key)?;
             }
             Value::Array(arr) => {
-                if let Ok(idx) = segment.parse::<usize>() {
+                if let Ok(idx) = key.parse::<usize>() {
                     current = arr.get(idx)?;
                 } else {
                     return None;
@@ -390,14 +746,43 @@ fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
     Some(current)
 }
 
+fn render_template(
+    tpl: &str,
+    element: &Value,
+    obj: &serde_json::Map<String, Value>,
+    params: &HashMap<String, String>,
+) -> String {
+    let re = Regex::new(r"\{([A-Za-z0-9_-]+)\}").expect("template regex");
+    re.replace_all(tpl, |caps: &regex::Captures| {
+        let key = &caps[1];
+        if let Some(v) = obj.get(key) {
+            if !v.is_null() {
+                return json_to_plain(v);
+            }
+        }
+        if let Some(v) = element.get(key) {
+            if !v.is_null() {
+                return json_to_plain(v);
+            }
+        }
+        if let Some(v) = params.get(key) {
+            return v.clone();
+        }
+        String::new()
+    })
+    .into_owned()
+}
+
 /// Extract a flat list of IDs from the initial response (for fetch_each mode).
 fn extract_id_list(body: &str, cmd: &Command) -> Result<Vec<String>> {
     let root: Value = serde_json::from_str(body).context("invalid JSON response")?;
 
     let array = if let Some(ref selector) = cmd.selector {
-        navigate_json(&root, selector)
-            .and_then(|v| v.as_array().cloned())
-            .unwrap_or_default()
+        match navigate_json(&root, selector) {
+            Some(Value::Array(arr)) => arr.clone(),
+            Some(other) => vec![other.clone()],
+            None => Vec::new(),
+        }
     } else if let Some(arr) = root.as_array() {
         arr.clone()
     } else {
@@ -417,14 +802,15 @@ fn extract_id_list(body: &str, cmd: &Command) -> Result<Vec<String>> {
 /// Fetch each item by ID and extract fields from the detail response.
 /// Fetches all items concurrently for performance.
 async fn fetch_each_item(
+    client: &reqwest::Client,
     base_url: &str,
     fe: &crate::adapter::FetchEach,
     ids: &[String],
     headers: &HashMap<String, String>,
+    timeout: Option<Duration>,
 ) -> Result<Vec<Value>> {
     let base = base_url.trim_end_matches('/');
 
-    // Build URLs for all IDs.
     let urls: Vec<String> = ids
         .iter()
         .map(|id| {
@@ -437,11 +823,12 @@ async fn fetch_each_item(
         })
         .collect();
 
-    // Fetch all concurrently.
-    let fetches = urls.iter().map(|url| fetch(url, headers));
+    let fetches = urls.iter().map(|url| {
+        fetch_with_client(client, url, headers, "GET", None, None, timeout)
+    });
     let results = futures::future::join_all(fetches).await;
+    let empty_params = HashMap::new();
 
-    // Extract fields from each response, preserving order.
     let mut items = Vec::with_capacity(ids.len());
     for result in results {
         let body = match result {
@@ -455,12 +842,7 @@ async fn fetch_each_item(
                     Ok(v) => v,
                     Err(_) => continue,
                 };
-                let mut obj = serde_json::Map::new();
-                for (field_name, field_def) in &fe.fields {
-                    let val = extract_field_json(&root, field_def)?;
-                    obj.insert(field_name.clone(), val);
-                }
-                items.push(Value::Object(obj));
+                items.push(extract_object(&root, &fe.fields, &empty_params, items.len())?);
             }
             _ => {
                 let mut obj = serde_json::Map::new();
@@ -478,20 +860,39 @@ async fn fetch_each_item(
 
 /// Extract items from an XML response (simple regex-based).
 fn extract_xml(body: &str, cmd: &Command) -> Result<Vec<Value>> {
-    // XML extraction reuses the HTML path — regex-based, no full parser.
     extract_html(body, cmd)
 }
 
 /// Apply a transform to an extracted string value.
 fn apply_transform(val: String, transform: &Option<Transform>) -> String {
+    match apply_transform_value(Value::String(val), transform) {
+        Value::String(s) => s,
+        other => json_to_plain(&other),
+    }
+}
+
+fn apply_transform_value(val: Value, transform: &Option<Transform>) -> Value {
     match transform {
-        None => val.trim().to_owned(),
-        Some(Transform::Trim) => val.trim().to_owned(),
-        Some(Transform::StripHtml) => strip_html(&val),
-        Some(Transform::DecodeEntities) => decode_entities(&val),
+        None => val,
+        Some(Transform::Trim) => Value::String(json_to_plain(&val).trim().to_owned()),
+        Some(Transform::StripHtml) => Value::String(strip_html(&json_to_plain(&val))),
+        Some(Transform::DecodeEntities) => Value::String(decode_entities(&json_to_plain(&val))),
         Some(Transform::ToNumber) => {
-            // Keep only digits, dots, minus.
-            val.chars().filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-').collect()
+            let digits: String = json_to_plain(&val)
+                .chars()
+                .filter(|c| c.is_ascii_digit() || *c == '.' || *c == '-')
+                .collect();
+            if let Ok(n) = digits.parse::<i64>() {
+                json!(n)
+            } else if let Ok(n) = digits.parse::<f64>() {
+                json!(n)
+            } else {
+                Value::String(digits)
+            }
+        }
+        Some(Transform::AddOne) => {
+            let n = json_to_plain(&val).parse::<i64>().unwrap_or(0) + 1;
+            json!(n)
         }
     }
 }
@@ -513,4 +914,183 @@ fn decode_entities(s: &str) -> String {
         .replace("&apos;", "'")
         .replace("&#x27;", "'")
         .replace("&nbsp;", " ")
+}
+
+/// Suggest similar names when a command/adapter is missing.
+pub fn suggest<'a>(needle: &str, available: impl Iterator<Item = &'a str>) -> String {
+    let n = needle.to_lowercase();
+    let mut scored: Vec<(&str, usize)> = available
+        .map(|name| {
+            let h = name.to_lowercase();
+            let dist = levenshtein(&n, &h);
+            (name, dist)
+        })
+        .filter(|(name, d)| *d <= 3 || (n.len() >= 3 && name.to_lowercase().contains(&n)))
+        .collect();
+    scored.sort_by_key(|(_, d)| *d);
+    let names: Vec<&str> = scored.into_iter().take(5).map(|(n, _)| n).collect();
+    if names.is_empty() {
+        String::new()
+    } else {
+        format!(". did you mean: {}?", names.join(", "))
+    }
+}
+
+fn levenshtein(a: &str, b: &str) -> usize {
+    let a: Vec<char> = a.chars().collect();
+    let b: Vec<char> = b.chars().collect();
+    let mut prev: Vec<usize> = (0..=b.len()).collect();
+    for (i, ca) in a.iter().enumerate() {
+        let mut cur = vec![i + 1];
+        for (j, cb) in b.iter().enumerate() {
+            let cost = if ca == cb { 0 } else { 1 };
+            cur.push((prev[j + 1] + 1).min(cur[j] + 1).min(prev[j] + cost));
+        }
+        prev = cur;
+    }
+    prev[b.len()]
+}
+
+#[cfg(test)]
+mod tests {
+    use super::*;
+    use crate::adapter::ParamDef;
+    use indexmap::IndexMap;
+
+    fn param(default: Option<&str>, required: bool) -> ParamDef {
+        ParamDef {
+            param_type: "string".into(),
+            required,
+            default: default.map(|d| json!(d)),
+            description: None,
+            positional: false,
+            choices: vec![],
+        }
+    }
+
+    #[test]
+    fn resolve_params_applies_defaults() {
+        let mut defs = IndexMap::new();
+        defs.insert("limit".into(), param(Some("10"), false));
+        defs.insert("query".into(), param(None, true));
+        let map = resolve_params(&defs, &[("query", "rust")]).unwrap();
+        assert_eq!(map.get("limit").unwrap(), "10");
+        assert_eq!(map.get("query").unwrap(), "rust");
+    }
+
+    #[test]
+    fn build_url_encodes_query_values() {
+        let mut defs = IndexMap::new();
+        defs.insert("query".into(), param(None, true));
+        let mut params = HashMap::new();
+        params.insert("query".into(), "large language model".into());
+        let url = build_url(
+            "https://example.com",
+            "/search?q={query}",
+            &params,
+            &defs,
+        )
+        .unwrap();
+        assert_eq!(url, "https://example.com/search?q=large%20language%20model");
+    }
+
+    #[test]
+    fn build_url_keeps_full_urls_unencoded() {
+        let defs = IndexMap::new();
+        let mut params = HashMap::new();
+        params.insert(
+            "url".into(),
+            "https://mp.weixin.qq.com/s/abc".into(),
+        );
+        let url = build_url("", "{url}", &params, &defs).unwrap();
+        assert_eq!(url, "https://mp.weixin.qq.com/s/abc");
+    }
+
+    #[test]
+    fn json_path_skips_array_marker() {
+        let v = json!({"eid": "abc", "title": "hello"});
+        assert_eq!(navigate_json(&v, "[].eid").unwrap(), &json!("abc"));
+        assert_eq!(navigate_json(&v, "title").unwrap(), &json!("hello"));
+    }
+
+    #[test]
+    fn extract_json_applies_strip_html_and_templates() {
+        let yaml = r#"
+name: demo
+description: demo
+base_url: https://example.com
+commands:
+  search:
+    description: search
+    url: /x
+    format: json
+    selector: hits
+    fields:
+      title:
+        json_path: title
+        transform: strip_html
+      url:
+        template: "https://example.com/posts/{id}/{slug}"
+      rank:
+        json_path: "@index"
+        transform: add_one
+"#;
+        let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
+        let cmd = adapter.commands.get("search").unwrap();
+        let body = r#"{"hits":[{"title":"<em>Hi</em>","id":"1","slug":"hi"}]}"#;
+        let items = extract_json(body, cmd, &HashMap::new()).unwrap();
+        assert_eq!(items[0]["title"], json!("Hi"));
+        assert_eq!(items[0]["url"], json!("https://example.com/posts/1/hi"));
+        assert_eq!(items[0]["rank"], json!(1));
+    }
+
+    #[test]
+    fn substitute_eval_replaces_mustache() {
+        let mut params = HashMap::new();
+        params.insert("text".into(), "hello \"world\"".into());
+        let js = "const text = `${{text}}`;";
+        assert_eq!(substitute_eval(js, &params), r#"const text = `hello \"world\"`;"#);
+    }
+
+    #[test]
+    fn graphql_body_only_replaces_params() {
+        let mut params = HashMap::new();
+        params.insert("limit".into(), "5".into());
+        let body = json!({
+            "query": "{ posts(input: {terms: {view: \"top\", limit: {limit}}}) { title } }"
+        });
+        let out = substitute_json(&body, &params);
+        let q = out["query"].as_str().unwrap();
+        assert!(q.contains("limit: 5"));
+        assert!(q.contains("{ posts"));
+        assert!(q.contains("{ title }"));
+    }
+
+    #[test]
+    fn extract_static_filters_by_param() {
+        let yaml = r#"
+name: demo
+description: demo
+base_url: https://example.com
+commands:
+  models:
+    description: models
+    format: static
+    columns: ["type", "model"]
+    data:
+      - { type: image, model: flux }
+      - { type: video, model: kling }
+    params:
+      type:
+        type: string
+        default: all
+"#;
+        let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
+        let cmd = adapter.commands.get("models").unwrap();
+        let mut params = HashMap::new();
+        params.insert("type".into(), "image".into());
+        let items = extract_static(cmd, &params).unwrap();
+        assert_eq!(items.len(), 1);
+        assert_eq!(items[0]["model"], json!("flux"));
+    }
 }

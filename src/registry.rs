@@ -25,7 +25,6 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("devto", include_str!("../adapters/devto.yaml")),
     ("lobsters", include_str!("../adapters/lobsters.yaml")),
     ("huggingface", include_str!("../adapters/huggingface.yaml")),
-    ("hf", include_str!("../adapters/huggingface.yaml")),
     ("steam", include_str!("../adapters/steam.yaml")),
     ("36kr", include_str!("../adapters/36kr.yaml")),
     ("medium", include_str!("../adapters/medium.yaml")),
@@ -145,10 +144,9 @@ impl Registry {
 
         // Load built-in adapters.
         for (name, yaml) in BUILTIN_ADAPTERS {
-            match serde_yaml_ng::from_str::<Adapter>(yaml) {
-                Ok(adapter) => { adapters.insert(name.to_string(), adapter); }
-                Err(e) => { debug!(name, error = %e, "failed to parse built-in adapter"); }
-            }
+            let adapter = serde_yaml_ng::from_str::<Adapter>(yaml)
+                .with_context(|| format!("failed to parse built-in adapter `{name}`"))?;
+            adapters.insert(name.to_string(), adapter);
         }
 
         // Load user adapters (override built-in).
@@ -170,18 +168,26 @@ impl Registry {
         Ok(registry)
     }
 
-    /// Find an adapter by name.
+    /// Find an adapter by name or alias.
     pub fn find(&self, name: &str) -> Result<&Adapter> {
-        self.adapters.get(name).with_context(|| {
-            let available: Vec<&str> = self.adapters.keys().map(|s| s.as_str()).collect();
-            format!("adapter `{name}` not found. available: {}", available.join(", "))
-        })
+        if let Some(adapter) = self.adapters.get(name) {
+            return Ok(adapter);
+        }
+        if let Some(adapter) = self.adapters.values().find(|a| {
+            a.name == name || a.aliases.iter().any(|alias| alias == name)
+        }) {
+            return Ok(adapter);
+        }
+        let available: Vec<&str> = self.list().iter().map(|a| a.name.as_str()).collect();
+        let hint = crate::pipeline::suggest(name, available.iter().copied());
+        anyhow::bail!("adapter `{name}` not found{hint}")
     }
 
-    /// List all available adapter names.
+    /// List all available adapters, de-duplicated by canonical name.
     pub fn list(&self) -> Vec<&Adapter> {
         let mut adapters: Vec<&Adapter> = self.adapters.values().collect();
         adapters.sort_by_key(|a| &a.name);
+        adapters.dedup_by(|a, b| a.name == b.name);
         adapters
     }
 
@@ -238,12 +244,18 @@ mod tests {
     #[test]
     fn builtin_adapters_parse() {
         let registry = Registry::load().expect("load");
-        assert!(registry.len() >= 5, "expected at least 5 built-in adapters");
+        assert!(registry.len() >= 100, "expected 100+ built-in adapters, got {}", registry.len());
         assert!(registry.find("hackernews").is_ok());
         assert!(registry.find("wikipedia").is_ok());
         assert!(registry.find("bilibili").is_ok());
         assert!(registry.find("arxiv").is_ok());
         assert!(registry.find("github-trending").is_ok());
+        assert!(registry.find("hf").is_ok());
+        assert_eq!(registry.find("hf").unwrap().name, "huggingface");
+        // aliases should not duplicate the list
+        let names: Vec<&str> = registry.list().iter().map(|a| a.name.as_str()).collect();
+        let hf_count = names.iter().filter(|n| **n == "huggingface").count();
+        assert_eq!(hf_count, 1);
     }
 
     #[test]

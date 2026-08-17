@@ -2,6 +2,8 @@ name: huggingface
 description: "Hugging Face — AI models, datasets, and trending"
 base_url: "https://huggingface.co/api"
 version: "1.0.0"
+aliases: ["hf"]
+tags: ["ai", "models"]
 
 commands:
   top:
