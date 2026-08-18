@@ -1,6 +1,6 @@
 [package]
 name = "anycli"
-version = "0.2.3"
+version = "0.2.4"
 edition = "2024"
 description = "Turn any website into structured CLI output. Declarative YAML adapters for web data extraction."
 license = "MIT"
@@ -32,3 +32,4 @@ clap_complete = "4"
 tracing = "0.1"
 async-trait = "0.1.89"
 futures = "0.3.32"
+include_dir = "0.7"

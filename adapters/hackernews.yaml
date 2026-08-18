@@ -2,6 +2,8 @@ name: hackernews
 description: "Hacker News — top stories, new stories, best, ask, show, jobs, search, users, and individual items"
 base_url: "https://hacker-news.firebaseio.com/v0"
 version: "1.0.0"
+aliases: ["hn"]
+tags: ["news"]
 
 commands:
   top:

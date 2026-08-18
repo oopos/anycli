@@ -28,11 +28,29 @@ pub struct Adapter {
     pub commands: HashMap<String, Command>,
 }
 
+impl Adapter {
+    /// Find a command by canonical name or alias.
+    pub fn command(&self, name: &str) -> Option<(&str, &Command)> {
+        if let Some((key, cmd)) = self.commands.get_key_value(name) {
+            return Some((key.as_str(), cmd));
+        }
+        self.commands.iter().find_map(|(key, cmd)| {
+            cmd.aliases
+                .iter()
+                .any(|alias| alias == name)
+                .then_some((key.as_str(), cmd))
+        })
+    }
+}
+
 /// A single command within an adapter.
 #[derive(Debug, Clone, Deserialize)]
 pub struct Command {
     /// Human-readable description.
     pub description: String,
+    /// Alternate command names (e.g. `rates` → `rate`).
+    #[serde(default)]
+    pub aliases: Vec<String>,
     /// URL path, may contain `{param}` placeholders. Relative to `base_url`.
     /// Optional for `static` / `desktop` commands that do not fetch a URL.
     #[serde(default)]
@@ -153,7 +171,7 @@ pub struct FieldDef {
     /// Default value if extraction fails.
     #[serde(default)]
     pub default: Option<String>,
-    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number", "add_one".
+    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number", "add_one", "join".
     #[serde(default)]
     pub transform: Option<Transform>,
 }
@@ -167,6 +185,8 @@ pub enum Transform {
     DecodeEntities,
     ToNumber,
     AddOne,
+    /// Join a JSON array into a comma-separated string.
+    Join,
 }
 
 /// CLI parameter definition.

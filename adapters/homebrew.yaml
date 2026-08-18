@@ -1,0 +1,57 @@
+name: homebrew
+description: "Homebrew — look up formulae and casks"
+base_url: "https://formulae.brew.sh"
+version: "1.0.0"
+aliases: ["brew"]
+tags: ["packages"]
+
+commands:
+  formula:
+    description: "Get a Homebrew formula by name"
+    aliases: ["info"]
+    url: "/api/formula/{name}.json"
+    format: json
+    selector: "$"
+    fields:
+      name:
+        json_path: "name"
+      desc:
+        json_path: "desc"
+      homepage:
+        json_path: "homepage"
+      version:
+        json_path: "versions.stable"
+      license:
+        json_path: "license"
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Formula name (e.g. wget, ffmpeg)"
+
+  cask:
+    description: "Get a Homebrew cask by name"
+    url: "/api/cask/{name}.json"
+    format: json
+    selector: "$"
+    fields:
+      token:
+        json_path: "token"
+      name:
+        json_path: "name[0]"
+        alt_paths: ["name"]
+      desc:
+        json_path: "desc"
+        default: ""
+      homepage:
+        json_path: "homepage"
+      version:
+        json_path: "version"
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Cask name (e.g. vlc, firefox)"

@@ -28,6 +28,8 @@ pub enum OutputFormat {
     #[default]
     Table,
     Json,
+    /// Compact JSON array (one line).
+    JsonCompact,
     Csv,
     Markdown,
     Yaml,
@@ -40,12 +42,13 @@ impl std::str::FromStr for OutputFormat {
     fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "table" => Ok(Self::Table),
-            "json" => Ok(Self::Json),
+            "json" | "pretty" => Ok(Self::Json),
+            "jsonc" | "compact" | "json-compact" => Ok(Self::JsonCompact),
             "csv" => Ok(Self::Csv),
             "markdown" | "md" => Ok(Self::Markdown),
             "yaml" | "yml" => Ok(Self::Yaml),
             "plain" | "tsv" => Ok(Self::Plain),
-            _ => bail!("unknown format `{s}`. supported: table, json, md, yaml, csv, plain"),
+            _ => bail!("unknown format `{s}`. supported: table, json, jsonc, md, yaml, csv, plain"),
         }
     }
 }
@@ -55,6 +58,7 @@ pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<Strin
     match fmt {
         OutputFormat::Table => format_table(result),
         OutputFormat::Json => format_json(result),
+        OutputFormat::JsonCompact => format_json_compact(result),
         OutputFormat::Csv => format_csv(result),
         OutputFormat::Markdown => format_markdown(result),
         OutputFormat::Yaml => format_yaml(result),
@@ -64,6 +68,10 @@ pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<Strin
 
 fn format_json(result: &PipelineResult) -> Result<String> {
     Ok(serde_json::to_string_pretty(&result.items)?)
+}
+
+fn format_json_compact(result: &PipelineResult) -> Result<String> {
+    Ok(serde_json::to_string(&result.items)?)
 }
 
 fn format_table(result: &PipelineResult) -> Result<String> {
@@ -139,6 +147,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
         out.push_str(&"─".repeat(w + 2));
     }
     out.push_str("┘\n");
+    out.push_str(&format!("({} rows)\n", result.items.len()));
 
     Ok(out)
 }
@@ -231,6 +240,16 @@ fn cell_value(item: &serde_json::Value, key: &str) -> String {
         Some(serde_json::Value::Number(n)) => n.to_string(),
         Some(serde_json::Value::Bool(b)) => b.to_string(),
         Some(serde_json::Value::Null) | None => String::new(),
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Null => String::new(),
+                other => other.to_string().trim_matches('"').to_owned(),
+            })
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(", "),
         Some(other) => other.to_string(),
     }
 }

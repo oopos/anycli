@@ -30,7 +30,7 @@ cargo build --release
 `anycli <adapter> <command>` is equivalent to `anycli run <adapter> <command>`.
 
 ```bash
-anycli <adapter> <command> [--format json|table|csv|markdown|yaml|plain] [--fields col,col] [key=value ...]
+anycli <adapter> <command> [--format json|jsonc|table|csv|markdown|yaml|plain] [--fields col,col] [--sort field] [--timeout secs] [key=value ...]
 ```
 
 Examples:
@@ -77,6 +77,11 @@ anycli wikipedia search 量子 lang=zh
 anycli cat hackernews
 anycli eject weather
 anycli coingecko top --sort price --reverse --fields name,price
+anycli hn top limit=5
+anycli exchange rates USD
+anycli packagist search monolog
+anycli brew formula wget
+anycli osv query lodash
 ```
 
 ### Community hub
@@ -109,7 +114,7 @@ anycli completions fish
 
 100+ adapters covering news, video, academic search, shopping, finance, and desktop apps. Run `anycli list` for the current set.
 
-Public JSON APIs (no browser): `hackernews`, `github`, `arxiv`, `wikipedia`, `pubmed`, `openalex`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, `rubygems`, `nuget`, `tvmaze`, `rfc`, `endoflife`, `countries`, …
+Public JSON APIs (no browser): `hackernews` (`hn`), `github`, `arxiv`, `wikipedia`, `pubmed`, `openalex`, `crossref`, `inspire`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, `packagist`, `maven`, `rubygems`, `nuget`, `hex`, `homebrew`, `goproxy`, `gitlab`, `tvmaze`, `rfc`, `endoflife`, `countries`, `archive`, `wikidata`, `flathub`, `osv`, `openfda`, `defillama`, …
 
 HTML / browser adapters: `github-trending`, `xiaohongshu`, `youtube`, `douyin`, …
 
@@ -160,12 +165,12 @@ Browser/desktop `evaluate` scripts can use `${{param}}` (or `{param}`) for CLI v
 **HTTP:** `method`, `headers`, `body`, `content_type`, `timeout`
 
 **Field extraction:**
-- `json_path` — dot-separated path (`data.title`, `[].eid`, `@index`)
+- `json_path` — dotted path with brackets (`data.title`, `weatherDesc[0].value`, `[].eid`, `@index`) and filters (`results[?kind=='podcast-episode']`)
 - `alt_paths` — fallback paths
 - `template` — build a value from `{field}`, JSON keys, or params
 - `pattern` — regex with a capture group for HTML/XML
 - `default` — fallback value
-- `transform` — `strip_html`, `trim`, `decode_entities`, `to_number`, `add_one`
+- `transform` — `strip_html`, `trim`, `decode_entities`, `to_number`, `add_one`, `join`
 
 **Advanced: fetch_each**
 
@@ -204,8 +209,9 @@ async fn main() -> anyhow::Result<()> {
 
 ## Output formats
 
-- **table** (default) — Unicode box-drawing table, CJK-aware; respects `NO_COLOR`
+- **table** (default) — Unicode box-drawing table, CJK-aware; respects `NO_COLOR`; prints a row count
 - **json** — pretty-printed JSON array
+- **jsonc** / **compact** — single-line JSON (`--compact` with `--format json`)
 - **csv** — comma-separated values
 - **markdown** / **md** — GitHub-flavored markdown table
 - **yaml** / **yml** — YAML array

@@ -1,0 +1,38 @@
+name: archive
+description: "Internet Archive — search texts, audio, video, and software"
+base_url: "https://archive.org"
+version: "1.0.0"
+aliases: ["ia", "archive.org"]
+tags: ["search", "media"]
+
+commands:
+  search:
+    description: "Search archive.org"
+    url: "/advancedsearch.php?q={query}&fl[]=identifier&fl[]=title&fl[]=year&fl[]=creator&fl[]=mediatype&sort[]=downloads+desc&rows={limit}&page=1&output=json"
+    format: json
+    selector: "response.docs"
+    fields:
+      identifier:
+        json_path: "identifier"
+      title:
+        json_path: "title"
+      creator:
+        json_path: "creator"
+        default: ""
+      year:
+        json_path: "year"
+        default: ""
+      mediatype:
+        json_path: "mediatype"
+      url:
+        template: "https://archive.org/details/{identifier}"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

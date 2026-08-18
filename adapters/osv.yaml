@@ -1,0 +1,68 @@
+name: osv
+description: "OSV — open source vulnerability database"
+base_url: "https://api.osv.dev"
+version: "1.0.0"
+tags: ["security"]
+
+commands:
+  query:
+    description: "List known vulnerabilities for a package"
+    aliases: ["search"]
+    url: "/v1/query"
+    method: POST
+    format: json
+    selector: "vulns"
+    fields:
+      id:
+        json_path: "id"
+      summary:
+        json_path: "summary"
+        default: ""
+      published:
+        json_path: "published"
+        default: ""
+      modified:
+        json_path: "modified"
+        default: ""
+    body:
+      package:
+        name: "{name}"
+        ecosystem: "{ecosystem}"
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Package name (e.g. lodash, requests)"
+      ecosystem:
+        type: string
+        default: "npm"
+        description: "Ecosystem: npm, PyPI, Go, crates.io, Maven, RubyGems, ..."
+      limit:
+        type: integer
+        default: 20
+        description: "Max vulnerabilities to show"
+
+  vuln:
+    description: "Look up a vulnerability by ID"
+    url: "/v1/vulns/{id}"
+    format: json
+    selector: "$"
+    fields:
+      id:
+        json_path: "id"
+      summary:
+        json_path: "summary"
+        default: ""
+      published:
+        json_path: "published"
+        default: ""
+      details:
+        json_path: "details"
+        default: ""
+    params:
+      id:
+        type: string
+        required: true
+        positional: true
+        description: "Vulnerability ID (e.g. GHSA-xxxx or CVE-2021-23337)"

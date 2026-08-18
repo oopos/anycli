@@ -2,10 +2,13 @@ name: exchange
 description: "汇率查询 — 实时汇率 (exchangerate-api)"
 base_url: "https://open.er-api.com/v6"
 version: "1.0.0"
+aliases: ["fx", "forex"]
+tags: ["finance"]
 
 commands:
   rate:
     description: "Get exchange rates for a base currency"
+    aliases: ["rates"]
     url: "/latest/{base}"
     format: json
     fields:
@@ -19,4 +22,5 @@ commands:
       base:
         type: string
         required: true
+        positional: true
         description: "Base currency code (e.g. USD, CNY, EUR, JPY)"

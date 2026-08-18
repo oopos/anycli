@@ -1,7 +1,9 @@
 name: dictionary
 description: "Free Dictionary — word definitions and synonyms"
 base_url: "https://api.dictionaryapi.dev/api/v2/entries/en"
-version: "1.0.0"
+version: "1.1.0"
+aliases: ["dict"]
+tags: ["reference"]
 
 commands:
   search:
@@ -13,11 +15,22 @@ commands:
         json_path: "word"
       phonetic:
         json_path: "phonetic"
+        alt_paths: ["phonetics[0].text"]
         default: ""
-      meanings:
-        json_path: "meanings"
+      part_of_speech:
+        json_path: "meanings[0].partOfSpeech"
+        default: ""
+      definition:
+        json_path: "meanings[0].definitions[0].definition"
+      example:
+        json_path: "meanings[0].definitions[0].example"
+        default: ""
+      synonyms:
+        json_path: "meanings[0].synonyms"
+        transform: join
     params:
       word:
         type: string
         required: true
+        positional: true
         description: "Word to look up"

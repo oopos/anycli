@@ -1,0 +1,53 @@
+name: defillama
+description: "DefiLlama — DeFi protocol TVL"
+base_url: "https://api.llama.fi"
+version: "1.0.0"
+aliases: ["llama"]
+tags: ["crypto", "finance"]
+
+commands:
+  protocols:
+    description: "List protocols by TVL"
+    aliases: ["top"]
+    url: "/protocols"
+    format: json
+    fields:
+      name:
+        json_path: "name"
+      symbol:
+        json_path: "symbol"
+        default: ""
+      tvl:
+        json_path: "tvl"
+      change_1d:
+        json_path: "change_1d"
+        default: ""
+      category:
+        json_path: "category"
+        default: ""
+      url:
+        json_path: "url"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 15
+        description: "Number of protocols"
+
+  chains:
+    description: "Chain TVL rankings"
+    url: "/v2/chains"
+    format: json
+    fields:
+      name:
+        json_path: "name"
+      tvl:
+        json_path: "tvl"
+      token:
+        json_path: "tokenSymbol"
+        default: ""
+    params:
+      limit:
+        type: integer
+        default: 15
+        description: "Number of chains"

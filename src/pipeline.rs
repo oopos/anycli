@@ -1,7 +1,7 @@
 //! Pipeline engine — fetch, parse, extract, and format web data.
 
 use std::collections::HashMap;
-use std::sync::atomic::{AtomicBool, Ordering};
+use std::sync::atomic::{AtomicBool, AtomicU64, Ordering};
 use std::time::Duration;
 
 use anyhow::{Context, Result, bail};
@@ -19,14 +19,29 @@ const MAX_RETRIES: u32 = 3;
 const USER_AGENT: &str = "Mozilla/5.0 (Macintosh; Intel Mac OS X 10_15_7) AppleWebKit/537.36 (KHTML, like Gecko) Chrome/120.0.0.0 Safari/537.36";
 
 static VERBOSE: AtomicBool = AtomicBool::new(false);
+static TIMEOUT_SECS: AtomicU64 = AtomicU64::new(0);
 
 /// Enable verbose request logging (`-v` / `ANYCLI_VERBOSE`).
 pub fn set_verbose(enabled: bool) {
     VERBOSE.store(enabled, Ordering::Relaxed);
 }
 
+/// Override the default request timeout (seconds). `0` restores the 30s client default.
+pub fn set_timeout_secs(secs: u64) {
+    TIMEOUT_SECS.store(secs, Ordering::Relaxed);
+}
+
 fn verbose_enabled() -> bool {
     VERBOSE.load(Ordering::Relaxed) || std::env::var_os("ANYCLI_VERBOSE").is_some()
+}
+
+fn global_timeout() -> Option<Duration> {
+    let secs = TIMEOUT_SECS.load(Ordering::Relaxed);
+    if secs == 0 {
+        None
+    } else {
+        Some(Duration::from_secs(secs))
+    }
 }
 
 /// Result of executing an adapter command.
@@ -160,10 +175,10 @@ impl Pipeline {
         command_name: &str,
         params: &[(&str, &str)],
     ) -> Result<PipelineResult> {
-        let cmd = adapter.commands.get(command_name).with_context(|| {
+        let (command_name, cmd) = adapter.command(command_name).ok_or_else(|| {
             let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
             let hint = suggest(command_name, available.iter().copied());
-            format!(
+            anyhow::anyhow!(
                 "command `{}` not found in adapter `{}`. available: {}{}",
                 command_name,
                 adapter.name,
@@ -178,7 +193,10 @@ impl Pipeline {
         let url = build_url(&adapter.base_url, &cmd.url, &param_map, &cmd.params)?;
         debug!(url, adapter = adapter.name, command = command_name, "fetching");
 
-        let timeout = cmd.timeout.map(Duration::from_secs);
+        let timeout = cmd
+            .timeout
+            .map(Duration::from_secs)
+            .or_else(global_timeout);
         let method = http_method(cmd.method.as_deref(), cmd.body.is_some());
         let body = cmd
             .body
@@ -777,9 +795,9 @@ fn extract_json_value(
         if selector == "$" || selector == "." {
             vec![root.clone()]
         } else {
-            match navigate_json(root, selector) {
-                Some(Value::Array(arr)) => arr.clone(),
-                Some(other) => vec![other.clone()],
+            match resolve_json(root, selector) {
+                Some(Value::Array(arr)) => arr,
+                Some(other) => vec![other],
                 None => Vec::new(),
             }
         }
@@ -852,9 +870,9 @@ fn extract_field_json(element: &Value, def: &FieldDef, index: usize) -> Result<V
         if path == "@index" {
             return Ok(apply_transform_value(json!(index), &def.transform));
         }
-        if let Some(v) = navigate_json(element, path) {
+        if let Some(v) = resolve_json(element, path) {
             if !v.is_null() {
-                return Ok(apply_transform_value(v.clone(), &def.transform));
+                return Ok(apply_transform_value(v, &def.transform));
             }
         }
     }
@@ -865,12 +883,9 @@ fn extract_field_json(element: &Value, def: &FieldDef, index: usize) -> Result<V
     })
 }
 
-/// Navigate a JSON value by a path.
-///
-/// Supports:
-/// - dots: `data.title`
-/// - array indices: `[1]`, `weatherDesc[0].value`, `hourly[4].weatherDesc[0].value`
-/// - `[]` as a no-op so `[].eid` reads `eid` on the current item
+/// Navigate a JSON value by a path (borrowed). Filter expressions (`[?k==v]`)
+/// cannot be borrowed and return `None`; use [`resolve_json`] for those.
+#[cfg(test)]
 pub(crate) fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
     if path.is_empty() || path == "[]" || path == "$" || path == "." {
         return Some(val);
@@ -879,6 +894,7 @@ pub(crate) fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value>
     for token in path_tokens(path)? {
         current = match token {
             PathToken::Skip => current,
+            PathToken::Filter { .. } => return None,
             PathToken::Key(key) => match current {
                 Value::Object(map) => map.get(key)?,
                 Value::Array(arr) => {
@@ -893,11 +909,49 @@ pub(crate) fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value>
     Some(current)
 }
 
+/// Like [`navigate_json`], but returns an owned value so JSONPath filters
+/// (`results[?kind=='podcast-episode']`) can produce a new array.
+fn resolve_json(val: &Value, path: &str) -> Option<Value> {
+    if path.is_empty() || path == "[]" || path == "$" || path == "." {
+        return Some(val.clone());
+    }
+    let mut current = val.clone();
+    for token in path_tokens(path)? {
+        current = match token {
+            PathToken::Skip => current,
+            PathToken::Key(key) => match &current {
+                Value::Object(map) => map.get(key)?.clone(),
+                Value::Array(arr) => {
+                    let idx: usize = key.parse().ok()?;
+                    arr.get(idx)?.clone()
+                }
+                _ => return None,
+            },
+            PathToken::Index(idx) => current.as_array()?.get(idx)?.clone(),
+            PathToken::Filter { key, value } => {
+                let arr = current.as_array()?;
+                Value::Array(
+                    arr.iter()
+                        .filter(|item| json_matches_filter(item, key, value))
+                        .cloned()
+                        .collect(),
+                )
+            }
+        };
+    }
+    Some(current)
+}
+
+fn json_matches_filter(item: &Value, key: &str, expected: &str) -> bool {
+    item.get(key).is_some_and(|v| json_to_plain(v) == expected)
+}
+
 #[derive(Debug, Clone, Copy)]
 enum PathToken<'a> {
     Skip,
     Key(&'a str),
     Index(usize),
+    Filter { key: &'a str, value: &'a str },
 }
 
 fn path_tokens(path: &str) -> Option<Vec<PathToken<'_>>> {
@@ -914,6 +968,8 @@ fn path_tokens(path: &str) -> Option<Vec<PathToken<'_>>> {
             let inner = &path[i + 1..i + 1 + close];
             if inner.is_empty() {
                 tokens.push(PathToken::Skip);
+            } else if let Some(filter) = parse_filter(inner) {
+                tokens.push(filter);
             } else {
                 tokens.push(PathToken::Index(inner.parse().ok()?));
             }
@@ -929,6 +985,29 @@ fn path_tokens(path: &str) -> Option<Vec<PathToken<'_>>> {
         i += len;
     }
     Some(tokens)
+}
+
+fn parse_filter(inner: &str) -> Option<PathToken<'_>> {
+    let expr = inner.strip_prefix('?')?.trim();
+    let (key, raw) = expr.split_once("==")?;
+    let key = key.trim();
+    if key.is_empty() {
+        return None;
+    }
+    Some(PathToken::Filter {
+        key,
+        value: unquote(raw.trim()),
+    })
+}
+
+fn unquote(s: &str) -> &str {
+    if s.len() >= 2
+        && ((s.starts_with('\'') && s.ends_with('\'')) || (s.starts_with('"') && s.ends_with('"')))
+    {
+        &s[1..s.len() - 1]
+    } else {
+        s
+    }
 }
 
 fn render_template(
@@ -963,9 +1042,9 @@ fn extract_id_list(body: &str, cmd: &Command) -> Result<Vec<String>> {
     let root: Value = serde_json::from_str(body).context("invalid JSON response")?;
 
     let array = if let Some(ref selector) = cmd.selector {
-        match navigate_json(&root, selector) {
-            Some(Value::Array(arr)) => arr.clone(),
-            Some(other) => vec![other.clone()],
+        match resolve_json(&root, selector) {
+            Some(Value::Array(arr)) => arr,
+            Some(other) => vec![other],
             None => Vec::new(),
         }
     } else if let Some(arr) = root.as_array() {
@@ -1094,6 +1173,16 @@ fn apply_transform_value(val: Value, transform: &Option<Transform>) -> Value {
             let n = json_to_plain(&val).parse::<i64>().unwrap_or(0) + 1;
             json!(n)
         }
+        Some(Transform::Join) => match val {
+            Value::Array(arr) => Value::String(
+                arr.iter()
+                    .map(json_to_plain)
+                    .filter(|s| !s.is_empty() && s != "null")
+                    .collect::<Vec<_>>()
+                    .join(", "),
+            ),
+            other => Value::String(json_to_plain(&other)),
+        },
     }
 }
 
@@ -1322,5 +1411,61 @@ commands:
     fn suggest_close_names() {
         let hint = suggest("hackernew", ["hackernews", "wikipedia"].into_iter());
         assert!(hint.contains("hackernews"));
+    }
+
+    #[test]
+    fn json_path_filter_by_field() {
+        let root = json!({
+            "results": [
+                {"kind": "podcast", "trackName": "Show"},
+                {"kind": "podcast-episode", "trackName": "Ep 1"},
+                {"kind": "podcast-episode", "trackName": "Ep 2"}
+            ]
+        });
+        let selected = resolve_json(&root, "results[?kind=='podcast-episode']").unwrap();
+        assert_eq!(selected.as_array().unwrap().len(), 2);
+        assert_eq!(selected[0]["trackName"], json!("Ep 1"));
+    }
+
+    #[test]
+    fn join_transform_flattens_arrays() {
+        let yaml = r#"
+name: demo
+description: demo
+base_url: https://example.com
+commands:
+  search:
+    description: search
+    url: /x
+    format: json
+    fields:
+      tags:
+        json_path: tags
+        transform: join
+"#;
+        let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
+        let cmd = adapter.commands.get("search").unwrap();
+        let body = r#"{"tags":["rust","cli"]}"#;
+        let items = extract_json(body, cmd, &HashMap::new()).unwrap();
+        assert_eq!(items[0]["tags"], json!("rust, cli"));
+    }
+
+    #[test]
+    fn command_alias_resolves() {
+        let yaml = r#"
+name: demo
+description: demo
+base_url: https://example.com
+commands:
+  rate:
+    description: rates
+    aliases: ["rates"]
+    url: /x
+    format: json
+    fields: {}
+"#;
+        let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
+        let (name, _) = adapter.command("rates").unwrap();
+        assert_eq!(name, "rate");
     }
 }

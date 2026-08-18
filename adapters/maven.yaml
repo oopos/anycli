@@ -1,0 +1,35 @@
+name: maven
+description: "Maven Central — search Java artifacts"
+base_url: "https://search.maven.org"
+version: "1.0.0"
+aliases: ["mvn"]
+tags: ["packages", "java"]
+
+commands:
+  search:
+    description: "Search Maven Central"
+    url: "/solrsearch/select?q={query}&rows={limit}&wt=json"
+    format: json
+    selector: "response.docs"
+    fields:
+      id:
+        json_path: "id"
+      group:
+        json_path: "g"
+      artifact:
+        json_path: "a"
+      version:
+        json_path: "latestVersion"
+      packaging:
+        json_path: "p"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query (e.g. g:junit, a:guava, or free text)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

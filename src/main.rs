@@ -8,7 +8,7 @@ use clap::{CommandFactory, Parser, Subcommand};
 use clap_complete::{Shell, generate};
 
 use anycli::adapter::Command;
-use anycli::{Hub, OutputFormat, Pipeline, Registry, set_color_enabled, set_verbose};
+use anycli::{Hub, OutputFormat, Pipeline, Registry, set_color_enabled, set_timeout_secs, set_verbose};
 
 const META_COMMANDS: &[&str] = &[
     "run",
@@ -33,6 +33,9 @@ struct Cli {
     /// Print request URLs (also set ANYCLI_VERBOSE=1).
     #[arg(short, long, global = true)]
     verbose: bool,
+    /// Request timeout in seconds (overrides the 30s default).
+    #[arg(long, global = true)]
+    timeout: Option<u64>,
     #[command(subcommand)]
     command: Commands,
 }
@@ -48,7 +51,7 @@ enum Commands {
         /// Parameters as key=value pairs (e.g., limit=10 query="rust").
         #[arg(trailing_var_arg = true, allow_hyphen_values = true)]
         params: Vec<String>,
-        /// Output format: table, json, md, yaml, csv, plain.
+        /// Output format: table, json, jsonc, md, yaml, csv, plain.
         #[arg(long, short, default_value = "table")]
         format: String,
         /// Comma-separated field names to include (and their order).
@@ -63,6 +66,9 @@ enum Commands {
         /// Reverse sort order (use with --sort).
         #[arg(long)]
         reverse: bool,
+        /// Compact JSON (same as `--format jsonc`).
+        #[arg(long)]
+        compact: bool,
     },
     /// List all available adapters.
     List {
@@ -178,6 +184,9 @@ async fn run() -> Result<()> {
     if cli.verbose {
         set_verbose(true);
     }
+    if let Some(secs) = cli.timeout {
+        set_timeout_secs(secs);
+    }
     let registry = Registry::load()?;
 
     match cli.command {
@@ -229,6 +238,7 @@ async fn run() -> Result<()> {
             no_color,
             sort,
             reverse,
+            compact,
         } => {
             let adapter = registry.find(&name)?;
             let (flags, raw_params) = strip_output_flags(&params);
@@ -255,10 +265,13 @@ async fn run() -> Result<()> {
                 return Ok(());
             }
 
-            let cmd = adapter.commands.get(&command);
+            let cmd = adapter.command(&command).map(|(_, c)| c);
             let parsed = parse_params(&raw_params, cmd);
             let fmt_str = flags.format.as_deref().unwrap_or(&format);
-            let fmt: OutputFormat = fmt_str.parse()?;
+            let mut fmt: OutputFormat = fmt_str.parse()?;
+            if (compact || flags.compact) && fmt == OutputFormat::Json {
+                fmt = OutputFormat::JsonCompact;
+            }
 
             let param_refs: Vec<(&str, &str)> = parsed
                 .iter()
@@ -445,6 +458,7 @@ struct OutputFlags {
     no_color: bool,
     sort: Option<String>,
     reverse: bool,
+    compact: bool,
 }
 
 /// Pull output-related flags out of trailing adapter params.
@@ -466,6 +480,27 @@ fn strip_output_flags(params: &[String]) -> (OutputFlags, Vec<String>) {
         }
         if p == "--reverse" {
             flags.reverse = true;
+            i += 1;
+            continue;
+        }
+        if p == "--compact" {
+            flags.compact = true;
+            i += 1;
+            continue;
+        }
+        if p == "--timeout" {
+            if let Some(val) = params.get(i + 1) {
+                if let Ok(secs) = val.parse::<u64>() {
+                    set_timeout_secs(secs);
+                }
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--timeout=") {
+            if let Ok(secs) = val.parse::<u64>() {
+                set_timeout_secs(secs);
+            }
             i += 1;
             continue;
         }
@@ -742,21 +777,28 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
         } else {
             ""
         };
+        let label = if cmd.aliases.is_empty() {
+            (*cmd_name).clone()
+        } else {
+            format!("{cmd_name}|{}", cmd.aliases.join("|"))
+        };
 
         println!(
             "  {:<28} {}",
-            format!("{} {}{}", cmd_name, opts, params_hint).trim(),
+            format!("{} {}{}", label, opts, params_hint).trim(),
             cmd.description
         );
     }
 
     println!("\nOptions:");
     println!(
-        "  -f, --format <fmt>         Output format: json, table, csv, markdown, yaml, plain [default: table]"
+        "  -f, --format <fmt>         Output format: json, jsonc, table, csv, markdown, yaml, plain [default: table]"
     );
     println!("      --fields <cols>        Comma-separated columns to include");
     println!("      --sort <field>         Sort rows by field");
     println!("      --reverse              Reverse sort order");
+    println!("      --compact              Compact JSON output");
+    println!("      --timeout <secs>       Request timeout in seconds");
     println!("      --no-color             Disable ANSI colors");
     println!("  -h, --help                 Display help for command");
     println!(
@@ -766,7 +808,7 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
 }
 
 fn print_command_help(adapter: &anycli::Adapter, cmd_name: &str) -> Result<()> {
-    let cmd = adapter.commands.get(cmd_name).ok_or_else(|| {
+    let (canonical, cmd) = adapter.command(cmd_name).ok_or_else(|| {
         let available: Vec<&str> = adapter.commands.keys().map(|s| s.as_str()).collect();
         let hint = anycli::pipeline::suggest(cmd_name, available.iter().copied());
         anyhow::anyhow!(
@@ -778,8 +820,11 @@ fn print_command_help(adapter: &anycli::Adapter, cmd_name: &str) -> Result<()> {
         )
     })?;
 
-    println!("Usage: anycli {} {} [params...]\n", adapter.name, cmd_name);
+    println!("Usage: anycli {} {} [params...]\n", adapter.name, canonical);
     println!("{}\n", cmd.description);
+    if !cmd.aliases.is_empty() {
+        println!("Aliases: {}\n", cmd.aliases.join(", "));
+    }
 
     if cmd.params.is_empty() {
         println!("No parameters.");

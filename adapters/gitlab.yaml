@@ -1,0 +1,38 @@
+name: gitlab
+description: "GitLab.com — search public projects"
+base_url: "https://gitlab.com/api/v4"
+version: "1.0.0"
+aliases: ["gl"]
+tags: ["code"]
+
+commands:
+  search:
+    description: "Search public GitLab projects"
+    url: "/projects?search={query}&simple=true&order_by=star_count&per_page={limit}"
+    format: json
+    fields:
+      name:
+        json_path: "name"
+      path:
+        json_path: "path_with_namespace"
+      stars:
+        json_path: "star_count"
+        default: ""
+      forks:
+        json_path: "forks_count"
+        default: ""
+      description:
+        json_path: "description"
+        default: ""
+      url:
+        json_path: "web_url"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"
