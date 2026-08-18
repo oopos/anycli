@@ -10,7 +10,7 @@ commands:
     url: "/search/publ/api?q={query}&format=json&h={limit}"
     format: json
     selector: "result.hits.hit"
-    timeout: 25
+    timeout: 45
     fields:
       title:
         json_path: "info.title"

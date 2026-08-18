@@ -31,6 +31,15 @@
       "tags": []
     },
     {
+      "name": "archive",
+      "description": "Internet Archive — search texts, audio, video, and software",
+      "version": "1.0.0",
+      "tags": [
+        "search",
+        "media"
+      ]
+    },
+    {
       "name": "arxiv",
       "description": "arXiv — search and browse academic papers",
       "version": "1.0.0",
@@ -139,9 +148,6 @@
       "tags": [
         "crypto",
         "finance"
-      ],
-      "aliases": [
-        "cg"
       ]
     },
     {
@@ -150,9 +156,6 @@
       "version": "1.0.0",
       "tags": [
         "geography"
-      ],
-      "aliases": [
-        "country"
       ]
     },
     {
@@ -166,6 +169,15 @@
       "description": "crates.io — search Rust crates",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "crossref",
+      "description": "Crossref — search scholarly works by DOI metadata",
+      "version": "1.0.0",
+      "tags": [
+        "academic",
+        "papers"
+      ]
     },
     {
       "name": "csdn",
@@ -186,6 +198,24 @@
       "tags": []
     },
     {
+      "name": "dblp",
+      "description": "DBLP — search computer science bibliography",
+      "version": "1.0.0",
+      "tags": [
+        "academic",
+        "papers"
+      ]
+    },
+    {
+      "name": "defillama",
+      "description": "DefiLlama — DeFi protocol TVL",
+      "version": "1.0.0",
+      "tags": [
+        "crypto",
+        "finance"
+      ]
+    },
+    {
       "name": "devto",
       "description": "DEV.to — developer community and blog platform",
       "version": "1.0.0",
@@ -194,8 +224,10 @@
     {
       "name": "dictionary",
       "description": "Free Dictionary — word definitions and synonyms",
-      "version": "1.0.0",
-      "tags": []
+      "version": "1.1.0",
+      "tags": [
+        "reference"
+      ]
     },
     {
       "name": "discord-app",
@@ -210,9 +242,6 @@
       "tags": [
         "containers",
         "packages"
-      ],
-      "aliases": [
-        "dh"
       ]
     },
     {
@@ -258,22 +287,30 @@
       "tags": [
         "software",
         "releases"
-      ],
-      "aliases": [
-        "eol"
       ]
     },
     {
       "name": "exchange",
       "description": "汇率查询 — 实时汇率 (exchangerate-api)",
       "version": "1.0.0",
-      "tags": []
+      "tags": [
+        "finance"
+      ]
     },
     {
       "name": "facebook",
       "description": "Facebook — news feed, search, and user profiles (requires login)",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "flathub",
+      "description": "Flathub — search Linux desktop apps",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "linux"
+      ]
     },
     {
       "name": "gemini",
@@ -300,6 +337,14 @@
       "tags": []
     },
     {
+      "name": "gitlab",
+      "description": "GitLab.com — search public projects",
+      "version": "1.0.0",
+      "tags": [
+        "code"
+      ]
+    },
+    {
       "name": "google",
       "description": "Google — search, news, suggestions, and trends",
       "version": "1.0.0",
@@ -310,6 +355,15 @@
       "description": "Google Scholar — academic paper search",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "goproxy",
+      "description": "Go module proxy — latest version and module info",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "go"
+      ]
     },
     {
       "name": "gov-law",
@@ -333,7 +387,26 @@
       "name": "hackernews",
       "description": "Hacker News — top stories, new stories, best, ask, show, jobs, search, users, and individual items",
       "version": "1.0.0",
-      "tags": []
+      "tags": [
+        "news"
+      ]
+    },
+    {
+      "name": "hex",
+      "description": "Hex.pm — search Elixir/Erlang packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "elixir"
+      ]
+    },
+    {
+      "name": "homebrew",
+      "description": "Homebrew — look up formulae and casks",
+      "version": "1.0.0",
+      "tags": [
+        "packages"
+      ]
     },
     {
       "name": "huggingface",
@@ -342,9 +415,6 @@
       "tags": [
         "ai",
         "models"
-      ],
-      "aliases": [
-        "hf"
       ]
     },
     {
@@ -358,6 +428,16 @@
       "description": "IMDb — movies, TV shows, and ratings",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "inspire",
+      "description": "INSPIRE-HEP — search high-energy physics literature",
+      "version": "1.0.0",
+      "tags": [
+        "academic",
+        "papers",
+        "physics"
+      ]
     },
     {
       "name": "instagram",
@@ -397,9 +477,6 @@
         "tech",
         "chinese",
         "articles"
-      ],
-      "aliases": [
-        "jj"
       ]
     },
     {
@@ -455,6 +532,15 @@
       "description": "脉脉 — 职场社交人才搜索",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "maven",
+      "description": "Maven Central — search Java artifacts",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "java"
+      ]
     },
     {
       "name": "mdn",
@@ -526,10 +612,35 @@
       ]
     },
     {
+      "name": "openfda",
+      "description": "openFDA — US drug labels",
+      "version": "1.0.0",
+      "tags": [
+        "medical"
+      ]
+    },
+    {
       "name": "oschina",
       "description": "开源中国 — 技术资讯和项目搜索",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "osv",
+      "description": "OSV — open source vulnerability database",
+      "version": "1.0.0",
+      "tags": [
+        "security"
+      ]
+    },
+    {
+      "name": "packagist",
+      "description": "Packagist — search PHP packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "php"
+      ]
     },
     {
       "name": "paperreview",
@@ -599,9 +710,6 @@
       "tags": [
         "packages",
         "ruby"
-      ],
-      "aliases": [
-        "gems"
       ]
     },
     {
@@ -756,6 +864,15 @@
       "description": "微信读书 — 书籍搜索和排行",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "wikidata",
+      "description": "Wikidata — search entities",
+      "version": "1.0.0",
+      "tags": [
+        "search",
+        "knowledge"
+      ]
     },
     {
       "name": "wikipedia",
