@@ -12,6 +12,8 @@ commands:
     url: "/cdx/search/cdx?url={url}&output=json&limit=25"
     format: json
     skip: 1
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
     fields:
       timestamp:
         json_path: "[1]"

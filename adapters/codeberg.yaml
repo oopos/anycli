@@ -10,6 +10,8 @@ commands:
     url: "/repos/search?q={query}&limit={limit}&sort=stars"
     format: json
     selector: "data"
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
     fields:
       name:
         json_path: "full_name"

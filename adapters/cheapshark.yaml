@@ -11,6 +11,8 @@ commands:
     aliases: ["search"]
     url: "/deals?storeID=1&pageSize={limit}&upperPrice={max_price}"
     format: json
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
     fields:
       title:
         json_path: "title"

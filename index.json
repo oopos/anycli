@@ -40,6 +40,15 @@
       ]
     },
     {
+      "name": "artifacthub",
+      "description": "Artifact Hub — search Helm charts and other packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "kubernetes"
+      ]
+    },
+    {
       "name": "arxiv",
       "description": "arXiv — search and browse academic papers",
       "version": "1.0.0",
@@ -130,10 +139,35 @@
       "tags": []
     },
     {
+      "name": "cheapshark",
+      "description": "CheapShark — PC game deals",
+      "version": "1.0.0",
+      "tags": [
+        "games"
+      ]
+    },
+    {
+      "name": "clinicaltrials",
+      "description": "ClinicalTrials.gov — search registered studies",
+      "version": "1.0.0",
+      "tags": [
+        "medical",
+        "academic"
+      ]
+    },
+    {
       "name": "cnki",
       "description": "中国知网 — 海外版论文搜索",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "codeberg",
+      "description": "Codeberg — search public Forgejo repositories",
+      "version": "1.0.0",
+      "tags": [
+        "code"
+      ]
     },
     {
       "name": "codex",
@@ -144,6 +178,15 @@
     {
       "name": "coingecko",
       "description": "CoinGecko — cryptocurrency prices and market data",
+      "version": "1.0.0",
+      "tags": [
+        "crypto",
+        "finance"
+      ]
+    },
+    {
+      "name": "coinpaprika",
+      "description": "CoinPaprika — cryptocurrency tickers",
       "version": "1.0.0",
       "tags": [
         "crypto",
@@ -196,6 +239,15 @@
       "description": "Cursor — AI code editor (desktop app via CDP)",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "datamuse",
+      "description": "Datamuse — related words, synonyms, and rhymes",
+      "version": "1.0.0",
+      "tags": [
+        "reference",
+        "language"
+      ]
     },
     {
       "name": "dblp",
@@ -269,6 +321,15 @@
       "tags": []
     },
     {
+      "name": "earthquakes",
+      "description": "USGS — recent earthquakes",
+      "version": "1.0.0",
+      "tags": [
+        "geo",
+        "science"
+      ]
+    },
+    {
       "name": "eastmoney",
       "description": "东方财富 — 热股榜排行",
       "version": "1.0.0",
@@ -304,6 +365,14 @@
       "tags": []
     },
     {
+      "name": "federalregister",
+      "description": "US Federal Register — recent articles",
+      "version": "1.0.0",
+      "tags": [
+        "gov"
+      ]
+    },
+    {
       "name": "flathub",
       "description": "Flathub — search Linux desktop apps",
       "version": "1.0.0",
@@ -313,10 +382,27 @@
       ]
     },
     {
+      "name": "gbif",
+      "description": "GBIF — Global Biodiversity Information Facility species search",
+      "version": "1.0.0",
+      "tags": [
+        "science"
+      ]
+    },
+    {
       "name": "gemini",
       "description": "Gemini - Google AI assistant",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "geocode",
+      "description": "Nominatim — geocode place names via OpenStreetMap",
+      "version": "1.0.0",
+      "tags": [
+        "geo",
+        "maps"
+      ]
     },
     {
       "name": "gitee",
@@ -446,6 +532,15 @@
       "tags": []
     },
     {
+      "name": "ip",
+      "description": "ip-api — IP geolocation (HTTP, non-commercial)",
+      "version": "1.0.0",
+      "tags": [
+        "geo",
+        "network"
+      ]
+    },
+    {
       "name": "jd",
       "description": "京东 — 商品搜索和详情（需要登录）",
       "version": "1.0.0",
@@ -558,6 +653,14 @@
       "tags": []
     },
     {
+      "name": "mempool",
+      "description": "mempool.space — Bitcoin fee estimates",
+      "version": "1.0.0",
+      "tags": [
+        "crypto"
+      ]
+    },
+    {
       "name": "mubu",
       "description": "幕布 — 大纲文档列表、最近编辑和全局搜索（需要登录）",
       "version": "1.0.0",
@@ -655,10 +758,46 @@
       "tags": []
     },
     {
+      "name": "poetry",
+      "description": "PoetryDB — poems by author or title",
+      "version": "1.0.0",
+      "tags": [
+        "reference",
+        "literature"
+      ]
+    },
+    {
+      "name": "pokeapi",
+      "description": "PokéAPI — Pokémon species data",
+      "version": "1.0.0",
+      "tags": [
+        "games",
+        "reference"
+      ]
+    },
+    {
       "name": "producthunt",
       "description": "Product Hunt — discover new tech products",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "pubchem",
+      "description": "PubChem — look up a compound by name",
+      "version": "1.0.0",
+      "tags": [
+        "science",
+        "medical"
+      ]
+    },
+    {
+      "name": "pubdev",
+      "description": "pub.dev — Dart and Flutter packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "dart"
+      ]
     },
     {
       "name": "pubmed",
@@ -681,6 +820,14 @@
       "description": "夸克网盘 — 文件列表（需要登录）",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "rcsb",
+      "description": "RCSB PDB — macromolecular structures",
+      "version": "1.0.0",
+      "tags": [
+        "science"
+      ]
     },
     {
       "name": "reddit",
@@ -773,6 +920,15 @@
       "tags": []
     },
     {
+      "name": "terraform",
+      "description": "Terraform Registry — search modules",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "infra"
+      ]
+    },
+    {
       "name": "ths",
       "description": "同花顺 — 热股榜排行",
       "version": "1.0.0",
@@ -824,6 +980,15 @@
       "tags": []
     },
     {
+      "name": "uniprot",
+      "description": "UniProt — protein sequence search",
+      "version": "1.0.0",
+      "tags": [
+        "science",
+        "medical"
+      ]
+    },
+    {
       "name": "v2ex",
       "description": "V2EX — 创意工作者社区，热门话题和最新讨论",
       "version": "1.0.0",
@@ -834,6 +999,15 @@
       "description": "万方数据 — 学术论文搜索",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "wayback",
+      "description": "Internet Archive Wayback Machine — CDX snapshot index",
+      "version": "1.0.0",
+      "tags": [
+        "search",
+        "archive"
+      ]
     },
     {
       "name": "weather",
