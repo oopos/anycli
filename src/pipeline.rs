@@ -91,6 +91,29 @@ impl PipelineResult {
         });
         self.count = self.items.len();
     }
+
+    /// Drop the first `n` items.
+    pub fn skip(&mut self, n: usize) {
+        let n = n.min(self.items.len());
+        self.items.drain(..n);
+        self.count = self.items.len();
+    }
+
+    /// Keep at most `n` items.
+    pub fn truncate(&mut self, n: usize) {
+        self.items.truncate(n);
+        self.count = self.items.len();
+    }
+
+    /// Keep the first occurrence of each value in `field`.
+    pub fn unique_by(&mut self, field: &str) {
+        let mut seen = std::collections::HashSet::new();
+        self.items.retain(|item| {
+            let key = item.get(field).map(json_to_plain).unwrap_or_default();
+            seen.insert(key)
+        });
+        self.count = self.items.len();
+    }
 }
 
 #[derive(Clone)]
@@ -275,6 +298,11 @@ impl Pipeline {
                 SourceFormat::Static => extract_static(cmd, &param_map)?,
             }
         };
+
+        if cmd.skip > 0 {
+            let n = cmd.skip.min(items.len());
+            items.drain(..n);
+        }
 
         // Apply limit (for non-fetch_each mode).
         if cmd.fetch_each.is_none() {
@@ -922,8 +950,18 @@ fn resolve_json(val: &Value, path: &str) -> Option<Value> {
             PathToken::Key(key) => match &current {
                 Value::Object(map) => map.get(key)?.clone(),
                 Value::Array(arr) => {
-                    let idx: usize = key.parse().ok()?;
-                    arr.get(idx)?.clone()
+                    if let Ok(idx) = key.parse::<usize>() {
+                        arr.get(idx)?.clone()
+                    } else {
+                        Value::Array(
+                            arr.iter()
+                                .filter_map(|item| match item {
+                                    Value::Object(map) => map.get(key).cloned(),
+                                    _ => None,
+                                })
+                                .collect(),
+                        )
+                    }
                 }
                 _ => return None,
             },
@@ -1182,6 +1220,17 @@ fn apply_transform_value(val: Value, transform: &Option<Transform>) -> Value {
                     .join(", "),
             ),
             other => Value::String(json_to_plain(&other)),
+        },
+        Some(Transform::First) => match val {
+            Value::Array(arr) => arr
+                .into_iter()
+                .find(|v| match v {
+                    Value::Null => false,
+                    Value::String(s) if s.is_empty() => false,
+                    _ => true,
+                })
+                .unwrap_or(Value::Null),
+            other => other,
         },
     }
 }
@@ -1467,5 +1516,64 @@ commands:
         let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
         let (name, _) = adapter.command("rates").unwrap();
         assert_eq!(name, "rate");
+    }
+
+    #[test]
+    fn json_path_plucks_array_of_objects() {
+        let root = json!({
+            "author": [
+                {"family": "Mineault", "given": "Patrick"},
+                {"family": "Ng", "given": "Andrew"}
+            ]
+        });
+        assert_eq!(
+            resolve_json(&root, "author[].family").unwrap(),
+            json!(["Mineault", "Ng"])
+        );
+        assert_eq!(
+            resolve_json(&root, "author.family").unwrap(),
+            json!(["Mineault", "Ng"])
+        );
+    }
+
+    #[test]
+    fn first_transform_skips_empty() {
+        let yaml = r#"
+name: demo
+description: demo
+base_url: https://example.com
+commands:
+  search:
+    description: search
+    url: /x
+    format: json
+    selector: "$"
+    fields:
+      phonetic:
+        json_path: phonetics[].text
+        transform: first
+"#;
+        let adapter: Adapter = serde_yaml_ng::from_str(yaml).unwrap();
+        let cmd = adapter.commands.get("search").unwrap();
+        let body = r#"{"phonetics":[{"audio":"a.mp3"},{"text":"/həˈloʊ/"}]}"#;
+        let items = extract_json(body, cmd, &HashMap::new()).unwrap();
+        assert_eq!(items[0]["phonetic"], json!("/həˈloʊ/"));
+    }
+
+    #[test]
+    fn unique_by_keeps_first() {
+        let mut result = PipelineResult {
+            adapter: "demo".into(),
+            command: "x".into(),
+            items: vec![
+                json!({"title": "a", "n": 1}),
+                json!({"title": "b", "n": 2}),
+                json!({"title": "a", "n": 3}),
+            ],
+            count: 3,
+        };
+        result.unique_by("title");
+        assert_eq!(result.items.len(), 2);
+        assert_eq!(result.items[1]["title"], json!("b"));
     }
 }

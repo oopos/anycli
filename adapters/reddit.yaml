@@ -28,7 +28,7 @@ commands:
         default: 20
         description: "Number of posts to return"
     headers:
-      User-Agent: "anycli/0.1"
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
 
   popular:
     description: "Popular posts across all subreddits"
@@ -54,7 +54,7 @@ commands:
         default: 20
         description: "Number of posts to return"
     headers:
-      User-Agent: "anycli/0.1"
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
 
   frontpage:
     description: "Posts from r/all — the frontpage of the internet"
@@ -80,7 +80,7 @@ commands:
         default: 20
         description: "Number of posts to return"
     headers:
-      User-Agent: "anycli/0.1"
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
 
   subreddit:
     description: "Posts from a specific subreddit"
@@ -108,7 +108,7 @@ commands:
         default: 20
         description: "Number of posts to return"
     headers:
-      User-Agent: "anycli/0.1"
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
 
   search:
     description: "Search posts across Reddit"
@@ -138,4 +138,4 @@ commands:
         default: 20
         description: "Number of results to return"
     headers:
-      User-Agent: "anycli/0.1"
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"

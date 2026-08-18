@@ -30,7 +30,7 @@ cargo build --release
 `anycli <adapter> <command>` is equivalent to `anycli run <adapter> <command>`.
 
 ```bash
-anycli <adapter> <command> [--format json|jsonc|table|csv|markdown|yaml|plain] [--fields col,col] [--sort field] [--timeout secs] [key=value ...]
+anycli <adapter> <command> [--format json|jsonc|table|csv|markdown|yaml|plain] [--fields col,col] [--sort field] [--limit n] [--offset n] [--unique field] [--timeout secs] [key=value ...]
 ```
 
 Examples:
@@ -82,6 +82,9 @@ anycli exchange rates USD
 anycli packagist search monolog
 anycli brew formula wget
 anycli osv query lodash
+anycli geocode search Tokyo
+anycli pokeapi get pikachu
+anycli pubchem compound aspirin
 ```
 
 ### Community hub
@@ -114,7 +117,7 @@ anycli completions fish
 
 100+ adapters covering news, video, academic search, shopping, finance, and desktop apps. Run `anycli list` for the current set.
 
-Public JSON APIs (no browser): `hackernews` (`hn`), `github`, `arxiv`, `wikipedia`, `pubmed`, `openalex`, `crossref`, `inspire`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, `packagist`, `maven`, `rubygems`, `nuget`, `hex`, `homebrew`, `goproxy`, `gitlab`, `tvmaze`, `rfc`, `endoflife`, `countries`, `archive`, `wikidata`, `flathub`, `osv`, `openfda`, `defillama`, …
+Public JSON APIs (no browser): `hackernews` (`hn`), `github`, `arxiv`, `wikipedia`, `pubmed`, `openalex`, `crossref`, `inspire`, `clinicaltrials`, `juejin`, `coingecko`, `coinpaprika`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, `packagist`, `maven`, `rubygems`, `nuget`, `hex`, `pubdev`, `homebrew`, `goproxy`, `terraform`, `artifacthub`, `gitlab`, `codeberg`, `tvmaze`, `rfc`, `endoflife`, `countries`, `archive`, `wayback`, `wikidata`, `flathub`, `osv`, `openfda`, `uniprot`, `pubchem`, `rcsb`, `gbif`, `geocode`, `earthquakes`, `datamuse`, `poetry`, `mempool`, `cheapshark`, `pokeapi`, …
 
 HTML / browser adapters: `github-trending`, `xiaohongshu`, `youtube`, `douyin`, …
 
@@ -165,12 +168,12 @@ Browser/desktop `evaluate` scripts can use `${{param}}` (or `{param}`) for CLI v
 **HTTP:** `method`, `headers`, `body`, `content_type`, `timeout`
 
 **Field extraction:**
-- `json_path` — dotted path with brackets (`data.title`, `weatherDesc[0].value`, `[].eid`, `@index`) and filters (`results[?kind=='podcast-episode']`)
+- `json_path` — dotted path with brackets (`data.title`, `weatherDesc[0].value`, `author[].family`, `[].eid`, `@index`) and filters (`results[?kind=='podcast-episode']`)
 - `alt_paths` — fallback paths
 - `template` — build a value from `{field}`, JSON keys, or params
 - `pattern` — regex with a capture group for HTML/XML
 - `default` — fallback value
-- `transform` — `strip_html`, `trim`, `decode_entities`, `to_number`, `add_one`, `join`
+- `transform` — `strip_html`, `trim`, `decode_entities`, `to_number`, `add_one`, `join`, `first`
 
 **Advanced: fetch_each**
 

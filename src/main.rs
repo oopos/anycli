@@ -69,6 +69,15 @@ enum Commands {
         /// Compact JSON (same as `--format jsonc`).
         #[arg(long)]
         compact: bool,
+        /// Keep at most this many rows (after sort/unique/offset).
+        #[arg(long)]
+        limit: Option<usize>,
+        /// Skip this many leading rows.
+        #[arg(long)]
+        offset: Option<usize>,
+        /// Deduplicate rows by this field (keep first).
+        #[arg(long)]
+        unique: Option<String>,
     },
     /// List all available adapters.
     List {
@@ -239,6 +248,9 @@ async fn run() -> Result<()> {
             sort,
             reverse,
             compact,
+            limit,
+            offset,
+            unique,
         } => {
             let adapter = registry.find(&name)?;
             let (flags, raw_params) = strip_output_flags(&params);
@@ -266,7 +278,12 @@ async fn run() -> Result<()> {
             }
 
             let cmd = adapter.command(&command).map(|(_, c)| c);
-            let parsed = parse_params(&raw_params, cmd);
+            let mut parsed = parse_params(&raw_params, cmd);
+            if let Some(n) = flags.limit.or(limit) {
+                if !parsed.iter().any(|(k, _)| k == "limit") {
+                    parsed.push(("limit".into(), n.to_string()));
+                }
+            }
             let fmt_str = flags.format.as_deref().unwrap_or(&format);
             let mut fmt: OutputFormat = fmt_str.parse()?;
             if (compact || flags.compact) && fmt == OutputFormat::Json {
@@ -283,6 +300,20 @@ async fn run() -> Result<()> {
             let sort_field = flags.sort.as_ref().or(sort.as_ref());
             if let Some(field) = sort_field {
                 result.sort_by(field, reverse || flags.reverse);
+            }
+
+            let unique_field = flags.unique.as_ref().or(unique.as_ref());
+            if let Some(field) = unique_field {
+                result.unique_by(field);
+            }
+
+            let off = flags.offset.or(offset).unwrap_or(0);
+            if off > 0 {
+                result.skip(off);
+            }
+
+            if let Some(n) = flags.limit.or(limit) {
+                result.truncate(n);
             }
 
             let fields = flags.fields.as_ref().or(fields.as_ref());
@@ -459,6 +490,9 @@ struct OutputFlags {
     sort: Option<String>,
     reverse: bool,
     compact: bool,
+    limit: Option<usize>,
+    offset: Option<usize>,
+    unique: Option<String>,
 }
 
 /// Pull output-related flags out of trailing adapter params.
@@ -485,6 +519,50 @@ fn strip_output_flags(params: &[String]) -> (OutputFlags, Vec<String>) {
         }
         if p == "--compact" {
             flags.compact = true;
+            i += 1;
+            continue;
+        }
+        if p == "--limit" {
+            if let Some(val) = params.get(i + 1) {
+                if let Ok(n) = val.parse::<usize>() {
+                    flags.limit = Some(n);
+                }
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--limit=") {
+            if let Ok(n) = val.parse::<usize>() {
+                flags.limit = Some(n);
+            }
+            i += 1;
+            continue;
+        }
+        if p == "--offset" {
+            if let Some(val) = params.get(i + 1) {
+                if let Ok(n) = val.parse::<usize>() {
+                    flags.offset = Some(n);
+                }
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--offset=") {
+            if let Ok(n) = val.parse::<usize>() {
+                flags.offset = Some(n);
+            }
+            i += 1;
+            continue;
+        }
+        if p == "--unique" {
+            if let Some(val) = params.get(i + 1) {
+                flags.unique = Some(val.clone());
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--unique=") {
+            flags.unique = Some(val.to_string());
             i += 1;
             continue;
         }
@@ -798,6 +876,9 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
     println!("      --sort <field>         Sort rows by field");
     println!("      --reverse              Reverse sort order");
     println!("      --compact              Compact JSON output");
+    println!("      --limit <n>            Max rows to print");
+    println!("      --offset <n>           Skip leading rows");
+    println!("      --unique <field>       Deduplicate by field");
     println!("      --timeout <secs>       Request timeout in seconds");
     println!("      --no-color             Disable ANSI colors");
     println!("  -h, --help                 Display help for command");

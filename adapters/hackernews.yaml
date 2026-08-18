@@ -203,6 +203,7 @@ commands:
       query:
         type: string
         required: true
+        positional: true
         description: "Search query"
       limit:
         type: integer

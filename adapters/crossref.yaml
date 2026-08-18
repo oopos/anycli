@@ -27,6 +27,9 @@ commands:
         default: ""
       url:
         json_path: "URL"
+      authors:
+        json_path: "author[].family"
+        transform: join
     params:
       query:
         type: string

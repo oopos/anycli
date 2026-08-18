@@ -1,0 +1,36 @@
+name: clinicaltrials
+description: "ClinicalTrials.gov — search registered studies"
+base_url: "https://clinicaltrials.gov/api/v2"
+version: "1.0.0"
+aliases: ["ctgov"]
+tags: ["medical", "academic"]
+
+commands:
+  search:
+    description: "Search clinical studies"
+    url: "/studies?query.term={query}&pageSize={limit}"
+    format: json
+    selector: "studies"
+    fields:
+      nct:
+        json_path: "protocolSection.identificationModule.nctId"
+      title:
+        json_path: "protocolSection.identificationModule.briefTitle"
+      org:
+        json_path: "protocolSection.identificationModule.organization.fullName"
+        default: ""
+      status:
+        json_path: "protocolSection.statusModule.overallStatus"
+        default: ""
+      url:
+        template: "https://clinicaltrials.gov/study/{nct}"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query (e.g. CRISPR, diabetes)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of studies"

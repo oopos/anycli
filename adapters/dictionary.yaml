@@ -15,7 +15,8 @@ commands:
         json_path: "word"
       phonetic:
         json_path: "phonetic"
-        alt_paths: ["phonetics[0].text"]
+        alt_paths: ["phonetics[].text"]
+        transform: first
         default: ""
       part_of_speech:
         json_path: "meanings[0].partOfSpeech"

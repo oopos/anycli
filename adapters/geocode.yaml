@@ -1,0 +1,37 @@
+name: geocode
+description: "Nominatim — geocode place names via OpenStreetMap"
+base_url: "https://nominatim.openstreetmap.org"
+version: "1.0.0"
+aliases: ["nominatim", "osm"]
+tags: ["geo", "maps"]
+
+commands:
+  search:
+    description: "Geocode a place name"
+    aliases: ["lookup"]
+    url: "/search?q={query}&format=json&limit={limit}"
+    format: json
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
+    fields:
+      name:
+        json_path: "display_name"
+      lat:
+        json_path: "lat"
+      lon:
+        json_path: "lon"
+      type:
+        json_path: "type"
+        default: ""
+      osm_id:
+        json_path: "osm_id"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Place name (e.g. Tokyo, 北京)"
+      limit:
+        type: integer
+        default: 5
+        description: "Number of results"

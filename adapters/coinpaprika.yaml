@@ -1,0 +1,53 @@
+name: coinpaprika
+description: "CoinPaprika — cryptocurrency tickers"
+base_url: "https://api.coinpaprika.com/v1"
+version: "1.0.0"
+aliases: ["paprika"]
+tags: ["crypto", "finance"]
+
+commands:
+  top:
+    description: "Top coins by rank"
+    url: "/tickers?limit={limit}"
+    format: json
+    fields:
+      rank:
+        json_path: "rank"
+      name:
+        json_path: "name"
+      symbol:
+        json_path: "symbol"
+      price:
+        json_path: "quotes.USD.price"
+      change_24h:
+        json_path: "quotes.USD.percent_change_24h"
+      market_cap:
+        json_path: "quotes.USD.market_cap"
+    params:
+      limit:
+        type: integer
+        default: 15
+        description: "Number of coins"
+
+  get:
+    description: "Ticker for one coin"
+    url: "/tickers/{id}"
+    format: json
+    selector: "$"
+    fields:
+      name:
+        json_path: "name"
+      symbol:
+        json_path: "symbol"
+      rank:
+        json_path: "rank"
+      price:
+        json_path: "quotes.USD.price"
+      change_24h:
+        json_path: "quotes.USD.percent_change_24h"
+    params:
+      id:
+        type: string
+        required: true
+        positional: true
+        description: "Coin id (e.g. btc-bitcoin, eth-ethereum)"

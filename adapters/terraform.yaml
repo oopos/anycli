@@ -1,0 +1,40 @@
+name: terraform
+description: "Terraform Registry — search modules"
+base_url: "https://registry.terraform.io"
+version: "1.0.0"
+aliases: ["tf"]
+tags: ["packages", "infra"]
+
+commands:
+  search:
+    description: "Search Terraform modules"
+    url: "/v1/modules/search?q={query}&limit={limit}"
+    format: json
+    selector: "modules"
+    fields:
+      id:
+        json_path: "id"
+      name:
+        json_path: "name"
+      provider:
+        json_path: "provider"
+      version:
+        json_path: "version"
+      downloads:
+        json_path: "downloads"
+      description:
+        json_path: "description"
+        default: ""
+      source:
+        json_path: "source"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search keyword (e.g. vpc, eks)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

@@ -1,0 +1,33 @@
+name: uniprot
+description: "UniProt — protein sequence search"
+base_url: "https://rest.uniprot.org"
+version: "1.0.0"
+tags: ["science", "medical"]
+
+commands:
+  search:
+    description: "Search UniProtKB"
+    url: "/uniprotkb/search?query={query}&size={limit}&format=json"
+    format: json
+    selector: "results"
+    fields:
+      accession:
+        json_path: "primaryAccession"
+      id:
+        json_path: "uniProtkbId"
+      organism:
+        json_path: "organism.scientificName"
+        default: ""
+      reviewed:
+        json_path: "entryType"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Query (e.g. insulin, gene:BRCA1)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

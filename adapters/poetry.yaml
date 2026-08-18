@@ -1,0 +1,61 @@
+name: poetry
+description: "PoetryDB — poems by author or title"
+base_url: "https://poetrydb.org"
+version: "1.0.0"
+tags: ["reference", "literature"]
+
+commands:
+  author:
+    description: "Poems by author"
+    url: "/author/{name}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+      lines:
+        json_path: "linecount"
+        alt_paths: ["lines"]
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Author name (e.g. Emily Dickinson)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of poems"
+
+  title:
+    description: "Find a poem by title"
+    url: "/title/{title}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+    params:
+      title:
+        type: string
+        required: true
+        positional: true
+        description: "Poem title"
+
+  random:
+    description: "Random poems"
+    url: "/random/{limit}"
+    format: json
+    fields:
+      title:
+        json_path: "title"
+      author:
+        json_path: "author"
+    params:
+      limit:
+        type: integer
+        default: 3
+        description: "Number of poems (max 10 or so)"

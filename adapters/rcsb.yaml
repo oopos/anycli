@@ -1,0 +1,35 @@
+name: rcsb
+description: "RCSB PDB — macromolecular structures"
+base_url: "https://data.rcsb.org"
+version: "1.0.0"
+aliases: ["pdb"]
+tags: ["science"]
+
+commands:
+  get:
+    description: "Get a PDB entry by ID"
+    aliases: ["entry"]
+    url: "/rest/v1/core/entry/{id}"
+    format: json
+    selector: "$"
+    fields:
+      id:
+        json_path: "entry.id"
+        alt_paths: ["rcsb_id"]
+      title:
+        json_path: "struct.title"
+      method:
+        json_path: "exptl[0].method"
+        default: ""
+      doi:
+        json_path: "citation[0].pdbx_database_id_DOI"
+        default: ""
+      pubmed:
+        json_path: "citation[0].pdbx_database_id_PubMed"
+        default: ""
+    params:
+      id:
+        type: string
+        required: true
+        positional: true
+        description: "PDB ID (e.g. 4HHB, 1BNA)"

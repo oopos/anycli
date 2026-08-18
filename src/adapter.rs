@@ -114,6 +114,9 @@ pub struct Command {
     /// via `fetch_each.url` (with `{id}` placeholder) to build the final items.
     #[serde(default)]
     pub fetch_each: Option<FetchEach>,
+    /// Drop this many leading items after extraction (e.g. CDX header row).
+    #[serde(default)]
+    pub skip: usize,
 }
 
 /// Fetch-each definition: the initial response is an ID list, and each
@@ -171,7 +174,7 @@ pub struct FieldDef {
     /// Default value if extraction fails.
     #[serde(default)]
     pub default: Option<String>,
-    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number", "add_one", "join".
+    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number", "add_one", "join", "first".
     #[serde(default)]
     pub transform: Option<Transform>,
 }
@@ -187,6 +190,8 @@ pub enum Transform {
     AddOne,
     /// Join a JSON array into a comma-separated string.
     Join,
+    /// Take the first non-empty value from a JSON array.
+    First,
 }
 
 /// CLI parameter definition.
