@@ -1,0 +1,33 @@
+name: openalex
+description: "OpenAlex — search scholarly works"
+base_url: "https://api.openalex.org"
+version: "1.0.0"
+tags: ["academic", "papers"]
+
+commands:
+  search:
+    description: "Search papers and preprints"
+    url: "/works?search={query}&per-page={limit}"
+    format: json
+    selector: "results"
+    fields:
+      title:
+        json_path: "title"
+      year:
+        json_path: "publication_year"
+      cited_by:
+        json_path: "cited_by_count"
+      doi:
+        json_path: "doi"
+        default: ""
+      url:
+        json_path: "id"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

@@ -1,0 +1,51 @@
+name: pubdev
+description: "pub.dev — Dart and Flutter packages"
+base_url: "https://pub.dev/api"
+version: "1.0.0"
+aliases: ["pub", "dart"]
+tags: ["packages", "dart"]
+
+commands:
+  search:
+    description: "Search pub.dev packages"
+    url: "/search?q={query}"
+    format: json
+    selector: "packages"
+    fields:
+      name:
+        json_path: "package"
+      url:
+        template: "https://pub.dev/packages/{name}"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"
+
+  info:
+    description: "Package details by name"
+    url: "/packages/{name}"
+    format: json
+    selector: "$"
+    fields:
+      name:
+        json_path: "name"
+      version:
+        json_path: "latest.version"
+      description:
+        json_path: "latest.pubspec.description"
+        default: ""
+      repository:
+        json_path: "latest.pubspec.repository"
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Package name (e.g. http, flutter_bloc)"

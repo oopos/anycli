@@ -1,0 +1,33 @@
+name: endoflife
+description: "endoflife.date — product support / EOL schedules"
+base_url: "https://endoflife.date/api"
+version: "1.0.0"
+aliases: ["eol"]
+tags: ["software", "releases"]
+
+commands:
+  product:
+    description: "Release cycles and end-of-life dates for a product"
+    url: "/{name}.json"
+    format: json
+    fields:
+      cycle:
+        json_path: "cycle"
+      latest:
+        json_path: "latest"
+      release:
+        json_path: "releaseDate"
+      support:
+        json_path: "support"
+        default: ""
+      eol:
+        json_path: "eol"
+        default: ""
+      lts:
+        json_path: "lts"
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        description: "Product id (python, nodejs, ubuntu, rust, ...)"

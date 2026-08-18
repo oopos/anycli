@@ -1,0 +1,46 @@
+name: earthquakes
+description: "USGS — recent earthquakes"
+base_url: "https://earthquake.usgs.gov"
+version: "1.0.0"
+aliases: ["usgs", "quake"]
+tags: ["geo", "science"]
+
+commands:
+  significant:
+    description: "Significant earthquakes in the past month"
+    aliases: ["month"]
+    url: "/earthquakes/feed/v1.0/summary/significant_month.geojson"
+    format: json
+    selector: "features"
+    fields:
+      mag:
+        json_path: "properties.mag"
+      place:
+        json_path: "properties.place"
+      tsunami:
+        json_path: "properties.tsunami"
+      url:
+        json_path: "properties.url"
+    params:
+      limit:
+        type: integer
+        default: 15
+        description: "Number of events"
+
+  day:
+    description: "M2.5+ earthquakes in the past day"
+    url: "/earthquakes/feed/v1.0/summary/2.5_day.geojson"
+    format: json
+    selector: "features"
+    fields:
+      mag:
+        json_path: "properties.mag"
+      place:
+        json_path: "properties.place"
+      url:
+        json_path: "properties.url"
+    params:
+      limit:
+        type: integer
+        default: 15
+        description: "Number of events"

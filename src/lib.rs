@@ -1,4 +1,4 @@
-//! OpenCLI — turn any website into structured CLI output.
+//! AnyCLI — turn any website into structured CLI output.
 //!
 //! Declarative YAML adapters define how to extract data from websites.
 //! The pipeline engine fetches, parses, extracts, and formats the data.
@@ -28,6 +28,6 @@ pub mod registry;
 pub use adapter::Adapter;
 pub use browser::{AgentBrowserFetcher, BrowserFetcher};
 pub use hub::Hub;
-pub use output::OutputFormat;
-pub use pipeline::{Pipeline, PipelineResult};
+pub use output::{set_color_enabled, OutputFormat};
+pub use pipeline::{set_timeout_secs, set_verbose, Pipeline, PipelineResult};
 pub use registry::Registry;

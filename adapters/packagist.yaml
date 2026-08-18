@@ -1,0 +1,38 @@
+name: packagist
+description: "Packagist — search PHP packages"
+base_url: "https://packagist.org"
+version: "1.0.0"
+aliases: ["composer"]
+tags: ["packages", "php"]
+
+commands:
+  search:
+    description: "Search Packagist packages"
+    url: "/search.json?q={query}&per_page={limit}"
+    format: json
+    selector: "results"
+    fields:
+      name:
+        json_path: "name"
+      description:
+        json_path: "description"
+        default: ""
+      downloads:
+        json_path: "downloads"
+      favers:
+        json_path: "favers"
+      url:
+        json_path: "url"
+      repository:
+        json_path: "repository"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

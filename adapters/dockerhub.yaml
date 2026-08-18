@@ -1,0 +1,34 @@
+name: dockerhub
+description: "Docker Hub — search container images"
+base_url: "https://hub.docker.com/v2"
+version: "1.0.0"
+aliases: ["dh"]
+tags: ["containers", "packages"]
+
+commands:
+  search:
+    description: "Search Docker Hub repositories"
+    url: "/search/repositories/?query={query}&page_size={limit}"
+    format: json
+    selector: "results"
+    fields:
+      name:
+        json_path: "repo_name"
+      description:
+        json_path: "short_description"
+        default: ""
+      stars:
+        json_path: "star_count"
+      pulls:
+        json_path: "pull_count"
+      official:
+        json_path: "is_official"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Image name or keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

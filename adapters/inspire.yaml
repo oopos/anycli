@@ -1,0 +1,37 @@
+name: inspire
+description: "INSPIRE-HEP — search high-energy physics literature"
+base_url: "https://inspirehep.net"
+version: "1.0.0"
+tags: ["academic", "papers", "physics"]
+
+commands:
+  search:
+    description: "Search INSPIRE literature"
+    url: "/api/literature?q={query}&size={limit}"
+    format: json
+    selector: "hits.hits"
+    fields:
+      title:
+        json_path: "metadata.titles[0].title"
+      citations:
+        json_path: "metadata.citation_count"
+        default: "0"
+      date:
+        json_path: "metadata.earliest_date"
+        default: ""
+      doi:
+        json_path: "metadata.dois[0].value"
+        default: ""
+      arxiv:
+        json_path: "metadata.arxiv_eprints[0].value"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

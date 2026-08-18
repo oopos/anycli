@@ -4,135 +4,21 @@ use std::collections::HashMap;
 use std::path::{Path, PathBuf};
 
 use anyhow::{Context, Result};
+use include_dir::{Dir, include_dir};
 use tracing::debug;
 
 use crate::adapter::Adapter;
 
-// Built-in adapters embedded at compile time.
-const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
-    ("hackernews", include_str!("../adapters/hackernews.yaml")),
-    ("github-trending", include_str!("../adapters/github_trending.yaml")),
-    ("arxiv", include_str!("../adapters/arxiv.yaml")),
-    ("wikipedia", include_str!("../adapters/wikipedia.yaml")),
-    ("bilibili", include_str!("../adapters/bilibili.yaml")),
-    ("v2ex", include_str!("../adapters/v2ex.yaml")),
-    ("douban", include_str!("../adapters/douban.yaml")),
-    ("zhihu", include_str!("../adapters/zhihu.yaml")),
-    ("weibo", include_str!("../adapters/weibo.yaml")),
-    ("reddit", include_str!("../adapters/reddit.yaml")),
-    ("stackoverflow", include_str!("../adapters/stackoverflow.yaml")),
-    ("github", include_str!("../adapters/github.yaml")),
-    ("devto", include_str!("../adapters/devto.yaml")),
-    ("lobsters", include_str!("../adapters/lobsters.yaml")),
-    ("huggingface", include_str!("../adapters/huggingface.yaml")),
-    ("hf", include_str!("../adapters/huggingface.yaml")),
-    ("steam", include_str!("../adapters/steam.yaml")),
-    ("36kr", include_str!("../adapters/36kr.yaml")),
-    ("medium", include_str!("../adapters/medium.yaml")),
-    ("bbc", include_str!("../adapters/bbc.yaml")),
-    ("producthunt", include_str!("../adapters/producthunt.yaml")),
-    ("xueqiu", include_str!("../adapters/xueqiu.yaml")),
-    ("bloomberg", include_str!("../adapters/bloomberg.yaml")),
-    ("binance", include_str!("../adapters/binance.yaml")),
-    ("sinafinance", include_str!("../adapters/sinafinance.yaml")),
-    ("bluesky", include_str!("../adapters/bluesky.yaml")),
-    ("google", include_str!("../adapters/google.yaml")),
-    ("gitee", include_str!("../adapters/gitee.yaml")),
-    ("imdb", include_str!("../adapters/imdb.yaml")),
-    ("tieba", include_str!("../adapters/tieba.yaml")),
-    ("dictionary", include_str!("../adapters/dictionary.yaml")),
-    ("weread", include_str!("../adapters/weread.yaml")),
-    ("youtube", include_str!("../adapters/youtube.yaml")),
-    ("xiaohongshu", include_str!("../adapters/xiaohongshu.yaml")),
-    ("linkedin", include_str!("../adapters/linkedin.yaml")),
-    ("cursor", include_str!("../adapters/cursor.yaml")),
-    ("chatgpt", include_str!("../adapters/chatgpt.yaml")),
-    ("douyin", include_str!("../adapters/douyin.yaml")),
-    ("jd", include_str!("../adapters/jd.yaml")),
-    ("taobao", include_str!("../adapters/taobao.yaml")),
-    ("kuaishou", include_str!("../adapters/kuaishou.yaml")),
-    ("twitter", include_str!("../adapters/twitter.yaml")),
-    ("instagram", include_str!("../adapters/instagram.yaml")),
-    ("tiktok", include_str!("../adapters/tiktok.yaml")),
-    ("facebook", include_str!("../adapters/facebook.yaml")),
-    ("jike", include_str!("../adapters/jike.yaml")),
-    ("hupu", include_str!("../adapters/hupu.yaml")),
-    ("zsxq", include_str!("../adapters/zsxq.yaml")),
-    ("substack", include_str!("../adapters/substack.yaml")),
-    ("apple-podcasts", include_str!("../adapters/apple-podcasts.yaml")),
-    ("yahoo-finance", include_str!("../adapters/yahoo-finance.yaml")),
-    ("reuters", include_str!("../adapters/reuters.yaml")),
-    ("xiaoyuzhou", include_str!("../adapters/xiaoyuzhou.yaml")),
-    ("xianyu", include_str!("../adapters/xianyu.yaml")),
-    ("smzdm", include_str!("../adapters/smzdm.yaml")),
-    ("pixiv", include_str!("../adapters/pixiv.yaml")),
-    ("lesswrong", include_str!("../adapters/lesswrong.yaml")),
-    ("ctrip", include_str!("../adapters/ctrip.yaml")),
-    ("1688", include_str!("../adapters/1688.yaml")),
-    ("amazon", include_str!("../adapters/amazon.yaml")),
-    ("coupang", include_str!("../adapters/coupang.yaml")),
-    ("boss", include_str!("../adapters/boss.yaml")),
-    ("maimai", include_str!("../adapters/maimai.yaml")),
-    ("eastmoney", include_str!("../adapters/eastmoney.yaml")),
-    ("ths", include_str!("../adapters/ths.yaml")),
-    ("tdx", include_str!("../adapters/tdx.yaml")),
-    ("barchart", include_str!("../adapters/barchart.yaml")),
-    ("doubao", include_str!("../adapters/doubao.yaml")),
-    ("gemini", include_str!("../adapters/gemini.yaml")),
-    ("grok", include_str!("../adapters/grok.yaml")),
-    ("yuanbao", include_str!("../adapters/yuanbao.yaml")),
-    ("discord-app", include_str!("../adapters/discord-app.yaml")),
-    ("notion", include_str!("../adapters/notion.yaml")),
-    ("chatwise", include_str!("../adapters/chatwise.yaml")),
-    ("codex", include_str!("../adapters/codex.yaml")),
-    ("chatgpt-app", include_str!("../adapters/chatgpt-app.yaml")),
-    ("antigravity", include_str!("../adapters/antigravity.yaml")),
-    ("mubu", include_str!("../adapters/mubu.yaml")),
-    ("notebooklm", include_str!("../adapters/notebooklm.yaml")),
-    ("ones", include_str!("../adapters/ones.yaml")),
-    ("quark", include_str!("../adapters/quark.yaml")),
-    ("xiaoe", include_str!("../adapters/xiaoe.yaml")),
-    ("weixin", include_str!("../adapters/weixin.yaml")),
-    ("cnki", include_str!("../adapters/cnki.yaml")),
-    ("linux-do", include_str!("../adapters/linux-do.yaml")),
-    ("sinablog", include_str!("../adapters/sinablog.yaml")),
-    ("band", include_str!("../adapters/band.yaml")),
-    ("ke", include_str!("../adapters/ke.yaml")),
-    ("jianyu", include_str!("../adapters/jianyu.yaml")),
-    ("jimeng", include_str!("../adapters/jimeng.yaml")),
-    ("nowcoder", include_str!("../adapters/nowcoder.yaml")),
-    ("spotify", include_str!("../adapters/spotify.yaml")),
-    ("uiverse", include_str!("../adapters/uiverse.yaml")),
-    ("web", include_str!("../adapters/web.yaml")),
-    ("weather", include_str!("../adapters/weather.yaml")),
-    ("npm", include_str!("../adapters/npm.yaml")),
-    ("crates", include_str!("../adapters/crates.yaml")),
-    ("pypi", include_str!("../adapters/pypi.yaml")),
-    ("exchange", include_str!("../adapters/exchange.yaml")),
-    ("kuaidi", include_str!("../adapters/kuaidi.yaml")),
-    ("csdn", include_str!("../adapters/csdn.yaml")),
-    ("oschina", include_str!("../adapters/oschina.yaml")),
-    ("baidu", include_str!("../adapters/baidu.yaml")),
-    ("toutiao", include_str!("../adapters/toutiao.yaml")),
-    ("ebay", include_str!("../adapters/ebay.yaml")),
-    ("lazada", include_str!("../adapters/lazada.yaml")),
-    ("shopee", include_str!("../adapters/shopee.yaml")),
-    ("tiktokshop", include_str!("../adapters/tiktokshop.yaml")),
-    ("baidu-scholar", include_str!("../adapters/baidu-scholar.yaml")),
-    ("google-scholar", include_str!("../adapters/google-scholar.yaml")),
-    ("wanfang", include_str!("../adapters/wanfang.yaml")),
-    ("chaoxing", include_str!("../adapters/chaoxing.yaml")),
-    ("doubao-app", include_str!("../adapters/doubao-app.yaml")),
-    ("gov-law", include_str!("../adapters/gov-law.yaml")),
-    ("gov-policy", include_str!("../adapters/gov-policy.yaml")),
-    ("paperreview", include_str!("../adapters/paperreview.yaml")),
-    ("yollomi", include_str!("../adapters/yollomi.yaml")),
-];
+/// Built-in adapter YAML files, embedded at compile time.
+/// Adding a file under `adapters/` is enough — no registry edit required.
+static BUILTIN_DIR: Dir<'_> = include_dir!("$CARGO_MANIFEST_DIR/adapters");
 
 /// Adapter registry holding all available adapters.
 #[derive(Debug)]
 pub struct Registry {
     adapters: HashMap<String, Adapter>,
+    /// Canonical adapter name → original YAML source.
+    sources: HashMap<String, String>,
 }
 
 impl Registry {
@@ -142,47 +28,88 @@ impl Registry {
     /// with the same name.
     pub fn load() -> Result<Self> {
         let mut adapters = HashMap::new();
+        let mut sources = HashMap::new();
 
-        // Load built-in adapters.
-        for (name, yaml) in BUILTIN_ADAPTERS {
-            match serde_yaml_ng::from_str::<Adapter>(yaml) {
-                Ok(adapter) => { adapters.insert(name.to_string(), adapter); }
-                Err(e) => { debug!(name, error = %e, "failed to parse built-in adapter"); }
+        // Load built-in adapters from the embedded adapters/ directory.
+        for file in BUILTIN_DIR.files() {
+            let path = file.path();
+            let ext = path.extension().and_then(|e| e.to_str()).unwrap_or("");
+            if ext != "yaml" && ext != "yml" {
+                continue;
             }
+            let yaml = file.contents_utf8().ok_or_else(|| {
+                anyhow::anyhow!("built-in adapter {} is not valid UTF-8", path.display())
+            })?;
+            let adapter = serde_yaml_ng::from_str::<Adapter>(yaml)
+                .with_context(|| format!("failed to parse built-in adapter `{}`", path.display()))?;
+            sources.insert(adapter.name.clone(), yaml.to_string());
+            adapters.insert(adapter.name.clone(), adapter);
         }
 
         // Load user adapters (override built-in).
         if let Some(user_dir) = user_adapter_dir() {
             if user_dir.is_dir() {
-                load_dir(&user_dir, &mut adapters)?;
+                load_dir(&user_dir, &mut adapters, &mut sources)?;
             }
         }
 
-        Ok(Self { adapters })
+        Ok(Self { adapters, sources })
     }
 
     /// Load adapters from a specific directory (in addition to built-in).
     pub fn load_with_dir(extra_dir: &Path) -> Result<Self> {
         let mut registry = Self::load()?;
         if extra_dir.is_dir() {
-            load_dir(extra_dir, &mut registry.adapters)?;
+            load_dir(extra_dir, &mut registry.adapters, &mut registry.sources)?;
         }
         Ok(registry)
     }
 
-    /// Find an adapter by name.
+    /// Find an adapter by name or alias.
     pub fn find(&self, name: &str) -> Result<&Adapter> {
-        self.adapters.get(name).with_context(|| {
-            let available: Vec<&str> = self.adapters.keys().map(|s| s.as_str()).collect();
-            format!("adapter `{name}` not found. available: {}", available.join(", "))
-        })
+        if let Some(adapter) = self.adapters.get(name) {
+            return Ok(adapter);
+        }
+        if let Some(adapter) = self.adapters.values().find(|a| {
+            a.name == name || a.aliases.iter().any(|alias| alias == name)
+        }) {
+            return Ok(adapter);
+        }
+        let available: Vec<&str> = self.list().iter().map(|a| a.name.as_str()).collect();
+        let hint = crate::pipeline::suggest(name, available.iter().copied());
+        anyhow::bail!("adapter `{name}` not found{hint}")
     }
 
-    /// List all available adapter names.
+    /// List all available adapters, de-duplicated by canonical name.
     pub fn list(&self) -> Vec<&Adapter> {
         let mut adapters: Vec<&Adapter> = self.adapters.values().collect();
         adapters.sort_by_key(|a| &a.name);
+        adapters.dedup_by(|a, b| a.name == b.name);
         adapters
+    }
+
+    /// Search loaded adapters by name, alias, tag, or description.
+    pub fn search(&self, query: &str) -> Vec<&Adapter> {
+        let q = query.to_lowercase();
+        self.list()
+            .into_iter()
+            .filter(|a| {
+                a.name.to_lowercase().contains(&q)
+                    || a.description.to_lowercase().contains(&q)
+                    || a.aliases.iter().any(|alias| alias.to_lowercase().contains(&q))
+                    || a.tags.iter().any(|tag| tag.to_lowercase().contains(&q))
+            })
+            .collect()
+    }
+
+    /// Original YAML for an adapter (user override, else built-in).
+    pub fn source_yaml(&self, name: &str) -> Result<&str> {
+        let adapter = self.find(name)?;
+        self.sources
+            .get(&adapter.name)
+            .or_else(|| self.sources.get(name))
+            .map(String::as_str)
+            .ok_or_else(|| anyhow::anyhow!("no YAML source for adapter `{}`", adapter.name))
     }
 
     /// Number of loaded adapters.
@@ -197,7 +124,11 @@ impl Registry {
 }
 
 /// Load all `.yaml` / `.yml` files from a directory into the adapter map.
-fn load_dir(dir: &Path, adapters: &mut HashMap<String, Adapter>) -> Result<()> {
+fn load_dir(
+    dir: &Path,
+    adapters: &mut HashMap<String, Adapter>,
+    sources: &mut HashMap<String, String>,
+) -> Result<()> {
     let entries = std::fs::read_dir(dir)
         .with_context(|| format!("failed to read adapter dir: {}", dir.display()))?;
 
@@ -215,6 +146,7 @@ fn load_dir(dir: &Path, adapters: &mut HashMap<String, Adapter>) -> Result<()> {
         match serde_yaml_ng::from_str::<Adapter>(&content) {
             Ok(adapter) => {
                 debug!(name = adapter.name, path = %path.display(), "loaded user adapter");
+                sources.insert(adapter.name.clone(), content);
                 adapters.insert(adapter.name.clone(), adapter);
             }
             Err(e) => {
@@ -238,17 +170,40 @@ mod tests {
     #[test]
     fn builtin_adapters_parse() {
         let registry = Registry::load().expect("load");
-        assert!(registry.len() >= 5, "expected at least 5 built-in adapters");
+        assert!(registry.len() >= 100, "expected 100+ built-in adapters, got {}", registry.len());
         assert!(registry.find("hackernews").is_ok());
         assert!(registry.find("wikipedia").is_ok());
         assert!(registry.find("bilibili").is_ok());
         assert!(registry.find("arxiv").is_ok());
         assert!(registry.find("github-trending").is_ok());
+        assert!(registry.find("hf").is_ok());
+        assert_eq!(registry.find("hf").unwrap().name, "huggingface");
+        assert!(registry.find("hn").is_ok());
+        assert_eq!(registry.find("hn").unwrap().name, "hackernews");
+        assert!(registry.find("packagist").is_ok());
+        assert!(registry.find("brew").unwrap().name == "homebrew");
+        // aliases should not duplicate the list
+        let names: Vec<&str> = registry.list().iter().map(|a| a.name.as_str()).collect();
+        let hf_count = names.iter().filter(|n| **n == "huggingface").count();
+        assert_eq!(hf_count, 1);
+        assert!(registry.source_yaml("hackernews").unwrap().contains("name: hackernews"));
+        assert!(registry.source_yaml("hf").unwrap().contains("name: huggingface"));
     }
 
     #[test]
     fn unknown_adapter_errors() {
         let registry = Registry::load().expect("load");
         assert!(registry.find("nonexistent").is_err());
+    }
+
+    #[test]
+    fn search_matches_name_alias_and_description() {
+        let registry = Registry::load().expect("load");
+        let hits = registry.search("juejin");
+        assert!(hits.iter().any(|a| a.name == "juejin"));
+        let hits = registry.search("jj");
+        assert!(hits.iter().any(|a| a.name == "juejin"));
+        let hits = registry.search("biomedical");
+        assert!(hits.iter().any(|a| a.name == "pubmed"));
     }
 }

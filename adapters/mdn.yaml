@@ -1,0 +1,31 @@
+name: mdn
+description: "MDN Web Docs — search web platform documentation"
+base_url: "https://developer.mozilla.org/api/v1"
+version: "1.0.0"
+tags: ["docs", "web"]
+
+commands:
+  search:
+    description: "Search MDN documentation"
+    url: "/search?q={query}&locale=en-US"
+    format: json
+    selector: "documents"
+    fields:
+      title:
+        json_path: "title"
+      summary:
+        json_path: "summary"
+        transform: strip_html
+      url:
+        template: "https://developer.mozilla.org{mdn_url}"
+      slug:
+        json_path: "slug"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query (e.g. fetch, flexbox)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

@@ -1,0 +1,36 @@
+name: gbif
+description: "GBIF — Global Biodiversity Information Facility species search"
+base_url: "https://api.gbif.org/v1"
+version: "1.0.0"
+tags: ["science"]
+
+commands:
+  search:
+    description: "Search species"
+    url: "/species/search?q={query}&limit={limit}"
+    format: json
+    selector: "results"
+    fields:
+      name:
+        json_path: "scientificName"
+      rank:
+        json_path: "rank"
+      status:
+        json_path: "taxonomicStatus"
+        default: ""
+      kingdom:
+        json_path: "kingdom"
+        default: ""
+      family:
+        json_path: "family"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Species name (e.g. Puma, Quercus)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

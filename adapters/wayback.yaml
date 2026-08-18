@@ -1,0 +1,39 @@
+name: wayback
+description: "Internet Archive Wayback Machine — CDX snapshot index"
+base_url: "https://web.archive.org"
+version: "1.0.0"
+aliases: ["cdx"]
+tags: ["search", "archive"]
+
+commands:
+  snapshots:
+    description: "List archived snapshots of a URL"
+    aliases: ["search", "cdx"]
+    url: "/cdx/search/cdx?url={url}&output=json&limit=25"
+    format: json
+    skip: 1
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
+    fields:
+      timestamp:
+        json_path: "[1]"
+      original:
+        json_path: "[2]"
+      mime:
+        json_path: "[3]"
+      status:
+        json_path: "[4]"
+      length:
+        json_path: "[6]"
+      archived:
+        template: "https://web.archive.org/web/{timestamp}/{original}"
+    params:
+      url:
+        type: string
+        required: true
+        positional: true
+        description: "URL to look up (e.g. example.com)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of snapshots"

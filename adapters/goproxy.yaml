@@ -1,0 +1,51 @@
+name: goproxy
+description: "Go module proxy — latest version and module info"
+base_url: "https://proxy.golang.org"
+version: "1.0.0"
+aliases: ["go"]
+tags: ["packages", "go"]
+
+commands:
+  latest:
+    description: "Latest version of a Go module"
+    url: "/{module}/@latest"
+    format: json
+    selector: "$"
+    fields:
+      version:
+        json_path: "Version"
+      time:
+        json_path: "Time"
+      vcs:
+        json_path: "Origin.VCS"
+        default: ""
+      repo:
+        json_path: "Origin.URL"
+        default: ""
+    params:
+      module:
+        type: string
+        required: true
+        positional: true
+        description: "Module path (e.g. github.com/gin-gonic/gin)"
+
+  info:
+    description: "Version metadata for a Go module"
+    url: "/{module}/@v/{version}.info"
+    format: json
+    selector: "$"
+    fields:
+      version:
+        json_path: "Version"
+      time:
+        json_path: "Time"
+    params:
+      module:
+        type: string
+        required: true
+        positional: true
+        description: "Module path"
+      version:
+        type: string
+        required: true
+        description: "Version tag (e.g. v1.9.1)"

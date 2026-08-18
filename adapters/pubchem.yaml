@@ -1,0 +1,29 @@
+name: pubchem
+description: "PubChem — look up a compound by name"
+base_url: "https://pubchem.ncbi.nlm.nih.gov"
+version: "1.0.0"
+tags: ["science", "medical"]
+
+commands:
+  compound:
+    description: "Compound properties by name"
+    aliases: ["search", "get"]
+    url: "/rest/pug/compound/name/{name}/property/MolecularFormula,MolecularWeight,IUPACName/JSON"
+    format: json
+    selector: "PropertyTable.Properties"
+    fields:
+      cid:
+        json_path: "CID"
+      formula:
+        json_path: "MolecularFormula"
+      weight:
+        json_path: "MolecularWeight"
+      iupac:
+        json_path: "IUPACName"
+        default: ""
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Compound name (e.g. aspirin, caffeine)"

@@ -1,0 +1,24 @@
+name: mempool
+description: "mempool.space — Bitcoin fee estimates"
+base_url: "https://mempool.space/api"
+version: "1.0.0"
+aliases: ["btc"]
+tags: ["crypto"]
+
+commands:
+  fees:
+    description: "Recommended Bitcoin fees (sat/vB)"
+    url: "/v1/fees/recommended"
+    format: json
+    selector: "$"
+    fields:
+      fastest:
+        json_path: "fastestFee"
+      half_hour:
+        json_path: "halfHourFee"
+      hour:
+        json_path: "hourFee"
+      economy:
+        json_path: "economyFee"
+      minimum:
+        json_path: "minimumFee"

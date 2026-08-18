@@ -1,0 +1,40 @@
+name: openfda
+description: "openFDA — US drug labels"
+base_url: "https://api.fda.gov"
+version: "1.0.0"
+aliases: ["fda"]
+tags: ["medical"]
+
+commands:
+  drug:
+    description: "Search drug labels by brand name"
+    aliases: ["search"]
+    url: "/drug/label.json?search=openfda.brand_name:{query}&limit={limit}"
+    format: json
+    selector: "results"
+    fields:
+      brand:
+        json_path: "openfda.brand_name"
+        transform: join
+      generic:
+        json_path: "openfda.generic_name"
+        transform: join
+      manufacturer:
+        json_path: "openfda.manufacturer_name"
+        transform: join
+      purpose:
+        json_path: "purpose[0]"
+        default: ""
+      route:
+        json_path: "openfda.route"
+        transform: join
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Brand name (e.g. tylenol, advil)"
+      limit:
+        type: integer
+        default: 5
+        description: "Number of labels"

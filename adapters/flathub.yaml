@@ -1,0 +1,39 @@
+name: flathub
+description: "Flathub — search Linux desktop apps"
+base_url: "https://flathub.org"
+version: "1.0.0"
+tags: ["packages", "linux"]
+
+commands:
+  search:
+    description: "Search Flathub apps"
+    url: "/api/v2/search"
+    method: POST
+    format: json
+    selector: "hits"
+    fields:
+      name:
+        json_path: "name"
+      summary:
+        json_path: "summary"
+        default: ""
+      app_id:
+        json_path: "app_id"
+      developer:
+        json_path: "developer_name"
+        default: ""
+      license:
+        json_path: "project_license"
+        default: ""
+    body:
+      query: "{query}"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

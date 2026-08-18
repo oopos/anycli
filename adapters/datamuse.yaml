@@ -1,0 +1,51 @@
+name: datamuse
+description: "Datamuse — related words, synonyms, and rhymes"
+base_url: "https://api.datamuse.com"
+version: "1.0.0"
+aliases: ["words"]
+tags: ["reference", "language"]
+
+commands:
+  related:
+    description: "Words with a similar meaning"
+    aliases: ["ml", "search"]
+    url: "/words?ml={query}&max={limit}"
+    format: json
+    fields:
+      word:
+        json_path: "word"
+      score:
+        json_path: "score"
+      tags:
+        json_path: "tags"
+        transform: join
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Word or phrase"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"
+
+  rhyme:
+    description: "Rhyming words"
+    url: "/words?rel_rhy={query}&max={limit}"
+    format: json
+    fields:
+      word:
+        json_path: "word"
+      score:
+        json_path: "score"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Word to rhyme"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

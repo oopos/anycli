@@ -1,0 +1,37 @@
+name: pubmed
+description: "PubMed / Europe PMC — search biomedical papers"
+base_url: "https://www.ebi.ac.uk/europepmc/webservices/rest"
+version: "1.0.0"
+tags: ["academic", "papers", "medical"]
+
+commands:
+  search:
+    description: "Search papers on Europe PMC (PubMed + preprints)"
+    url: "/search?query={query}&pageSize={limit}&format=json"
+    format: json
+    selector: "resultList.result"
+    fields:
+      id:
+        json_path: "id"
+      title:
+        json_path: "title"
+      authors:
+        json_path: "authorString"
+      year:
+        json_path: "pubYear"
+      doi:
+        json_path: "doi"
+        default: ""
+      source:
+        json_path: "source"
+      url:
+        template: "https://europepmc.org/article/{source}/{id}"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search query (e.g. CRISPR, AUTH:Smith)"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

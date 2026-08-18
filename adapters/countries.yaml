@@ -1,0 +1,56 @@
+name: countries
+description: "World Bank — country metadata by ISO code"
+base_url: "https://api.worldbank.org/v2"
+version: "1.0.0"
+aliases: ["country"]
+tags: ["geography"]
+
+commands:
+  get:
+    description: "Look up a country by ISO2/ISO3 code (JP, JPN, US, ...)"
+    url: "/country/{id}?format=json"
+    format: json
+    selector: "[1]"
+    fields:
+      name:
+        json_path: "name"
+      id:
+        json_path: "id"
+      iso2:
+        json_path: "iso2Code"
+      capital:
+        json_path: "capitalCity"
+        default: ""
+      region:
+        json_path: "region.value"
+      income:
+        json_path: "incomeLevel.value"
+        default: ""
+    params:
+      id:
+        type: string
+        required: true
+        description: "ISO country code (JP, JPN, US, USA, CN, ...)"
+
+  list:
+    description: "List countries"
+    url: "/country?format=json&per_page={limit}"
+    format: json
+    selector: "[1]"
+    fields:
+      name:
+        json_path: "name"
+      id:
+        json_path: "id"
+      iso2:
+        json_path: "iso2Code"
+      capital:
+        json_path: "capitalCity"
+        default: ""
+      region:
+        json_path: "region.value"
+    params:
+      limit:
+        type: integer
+        default: 20
+        description: "Number of countries"

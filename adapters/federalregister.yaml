@@ -1,0 +1,55 @@
+name: federalregister
+description: "US Federal Register — recent articles"
+base_url: "https://www.federalregister.gov/api/v1"
+version: "1.0.0"
+aliases: ["fedreg"]
+tags: ["gov"]
+
+commands:
+  latest:
+    description: "Newest Federal Register documents"
+    aliases: ["new"]
+    url: "/articles.json?per_page={limit}&order=newest"
+    format: json
+    selector: "results"
+    fields:
+      title:
+        json_path: "title"
+      type:
+        json_path: "type"
+      date:
+        json_path: "publication_date"
+      number:
+        json_path: "document_number"
+      url:
+        json_path: "html_url"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of documents"
+
+  search:
+    description: "Search Federal Register documents"
+    url: "/articles.json?conditions[term]={query}&per_page={limit}&order=relevance"
+    format: json
+    selector: "results"
+    fields:
+      title:
+        json_path: "title"
+      type:
+        json_path: "type"
+      date:
+        json_path: "publication_date"
+      url:
+        json_path: "html_url"
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search term"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of documents"

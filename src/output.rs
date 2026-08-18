@@ -1,9 +1,25 @@
 //! Output formatting — JSON, table, CSV, and Markdown.
 
+use std::sync::atomic::{AtomicBool, Ordering};
+
 use anyhow::{Result, bail};
 use serde::Deserialize;
 
 use crate::pipeline::PipelineResult;
+
+static DISABLE_COLOR: AtomicBool = AtomicBool::new(false);
+
+/// Disable ANSI colors (honored by table output). Also respects `NO_COLOR`.
+pub fn set_color_enabled(enabled: bool) {
+    DISABLE_COLOR.store(!enabled, Ordering::Relaxed);
+}
+
+fn color_enabled() -> bool {
+    if DISABLE_COLOR.load(Ordering::Relaxed) {
+        return false;
+    }
+    std::env::var_os("NO_COLOR").is_none()
+}
 
 /// Supported output formats.
 #[derive(Debug, Clone, Copy, Default, Deserialize, PartialEq)]
@@ -12,6 +28,8 @@ pub enum OutputFormat {
     #[default]
     Table,
     Json,
+    /// Compact JSON array (one line).
+    JsonCompact,
     Csv,
     Markdown,
     Yaml,
@@ -24,12 +42,13 @@ impl std::str::FromStr for OutputFormat {
     fn from_str(s: &str) -> Result<Self> {
         match s.to_lowercase().as_str() {
             "table" => Ok(Self::Table),
-            "json" => Ok(Self::Json),
+            "json" | "pretty" => Ok(Self::Json),
+            "jsonc" | "compact" | "json-compact" => Ok(Self::JsonCompact),
             "csv" => Ok(Self::Csv),
             "markdown" | "md" => Ok(Self::Markdown),
             "yaml" | "yml" => Ok(Self::Yaml),
             "plain" | "tsv" => Ok(Self::Plain),
-            _ => bail!("unknown format `{s}`. supported: table, json, md, yaml, csv, plain"),
+            _ => bail!("unknown format `{s}`. supported: table, json, jsonc, md, yaml, csv, plain"),
         }
     }
 }
@@ -39,6 +58,7 @@ pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<Strin
     match fmt {
         OutputFormat::Table => format_table(result),
         OutputFormat::Json => format_json(result),
+        OutputFormat::JsonCompact => format_json_compact(result),
         OutputFormat::Csv => format_csv(result),
         OutputFormat::Markdown => format_markdown(result),
         OutputFormat::Yaml => format_yaml(result),
@@ -48,6 +68,10 @@ pub fn format_result(result: &PipelineResult, fmt: OutputFormat) -> Result<Strin
 
 fn format_json(result: &PipelineResult) -> Result<String> {
     Ok(serde_json::to_string_pretty(&result.items)?)
+}
+
+fn format_json_compact(result: &PipelineResult) -> Result<String> {
+    Ok(serde_json::to_string(&result.items)?)
 }
 
 fn format_table(result: &PipelineResult) -> Result<String> {
@@ -88,7 +112,11 @@ fn format_table(result: &PipelineResult) -> Result<String> {
     for (i, key) in keys.iter().enumerate() {
         if i > 0 { out.push_str("│"); }
         let padded = pad_display(key, widths[i]);
-        out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
+        if color_enabled() {
+            out.push_str(&format!(" \x1b[1;36m{padded}\x1b[0m "));
+        } else {
+            out.push_str(&format!(" {padded} "));
+        }
     }
     out.push_str("│\n");
 
@@ -106,7 +134,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
         for (i, val) in row.iter().enumerate() {
             if i > 0 { out.push_str("│"); }
             out.push(' ');
-            out.push_str(&pad_display(&truncate(val, widths[i]), widths[i]));
+            out.push_str(&pad_display(&truncate_display(val, widths[i]), widths[i]));
             out.push(' ');
         }
         out.push_str("│\n");
@@ -119,6 +147,7 @@ fn format_table(result: &PipelineResult) -> Result<String> {
         out.push_str(&"─".repeat(w + 2));
     }
     out.push_str("┘\n");
+    out.push_str(&format!("({} rows)\n", result.items.len()));
 
     Ok(out)
 }
@@ -211,6 +240,16 @@ fn cell_value(item: &serde_json::Value, key: &str) -> String {
         Some(serde_json::Value::Number(n)) => n.to_string(),
         Some(serde_json::Value::Bool(b)) => b.to_string(),
         Some(serde_json::Value::Null) | None => String::new(),
+        Some(serde_json::Value::Array(arr)) => arr
+            .iter()
+            .map(|v| match v {
+                serde_json::Value::String(s) => s.clone(),
+                serde_json::Value::Null => String::new(),
+                other => other.to_string().trim_matches('"').to_owned(),
+            })
+            .filter(|s| !s.is_empty())
+            .collect::<Vec<_>>()
+            .join(", "),
         Some(other) => other.to_string(),
     }
 }
@@ -248,16 +287,31 @@ fn pad_display(s: &str, target_width: usize) -> String {
     }
 }
 
-fn truncate(s: &str, max: usize) -> String {
-    let chars: Vec<char> = s.chars().collect();
-    if chars.len() <= max {
-        s.to_owned()
-    } else if max > 3 {
-        let truncated: String = chars[..max - 3].iter().collect();
-        format!("{truncated}...")
-    } else {
-        chars[..max].iter().collect()
+fn truncate_display(s: &str, max: usize) -> String {
+    if display_width(s) <= max {
+        return s.to_owned();
     }
+    if max <= 3 {
+        let mut out = String::new();
+        for c in s.chars() {
+            let w = if is_wide_char(c) { 2 } else { 1 };
+            if display_width(&out) + w > max {
+                break;
+            }
+            out.push(c);
+        }
+        return out;
+    }
+    let target = max - 3;
+    let mut out = String::new();
+    for c in s.chars() {
+        let w = if is_wide_char(c) { 2 } else { 1 };
+        if display_width(&out) + w > target {
+            break;
+        }
+        out.push(c);
+    }
+    format!("{out}...")
 }
 
 fn csv_escape(s: &str) -> String {

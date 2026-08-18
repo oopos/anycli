@@ -1,0 +1,39 @@
+name: dblp
+description: "DBLP — search computer science bibliography"
+base_url: "https://dblp.org"
+version: "1.0.0"
+tags: ["academic", "papers"]
+
+commands:
+  search:
+    description: "Search DBLP publications"
+    url: "/search/publ/api?q={query}&format=json&h={limit}"
+    format: json
+    selector: "result.hits.hit"
+    timeout: 45
+    fields:
+      title:
+        json_path: "info.title"
+      year:
+        json_path: "info.year"
+        default: ""
+      venue:
+        json_path: "info.venue"
+        default: ""
+      doi:
+        json_path: "info.doi"
+        default: ""
+      url:
+        json_path: "info.ee"
+        alt_paths: ["info.url"]
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

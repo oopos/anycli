@@ -16,7 +16,7 @@ use tracing::debug;
 const HUB_REPO: &str = "oopos/anycli";
 const HUB_BRANCH: &str = "main";
 const REQUEST_TIMEOUT: Duration = Duration::from_secs(15);
-const USER_AGENT: &str = "anycli/0.1";
+const USER_AGENT: &str = concat!("anycli/", env!("CARGO_PKG_VERSION"));
 
 /// Metadata for a single adapter in the hub index.
 #[derive(Debug, Clone, Serialize, Deserialize)]
@@ -103,30 +103,57 @@ impl Hub {
     ///
     /// Returns the path where the adapter was saved.
     pub async fn install(&self, name: &str, adapters_dir: &Path) -> Result<PathBuf> {
-        let url = format!("{}/adapters/{name}.yaml", self.base_url);
-        debug!(url, name, "downloading adapter");
+        let candidates = [
+            format!("{name}.yaml"),
+            format!("{}.yaml", name.replace('-', "_")),
+        ];
 
-        let resp = self.client.get(&url).send().await
-            .with_context(|| format!("failed to download adapter `{name}`"))?;
+        let mut last_status = None;
+        let mut content = None;
 
-        if !resp.status().is_success() {
-            if resp.status().as_u16() == 404 {
-                bail!("adapter `{name}` not found in hub");
+        for file in &candidates {
+            let url = format!("{}/adapters/{file}", self.base_url);
+            debug!(url, name, "downloading adapter");
+
+            let resp = self
+                .client
+                .get(&url)
+                .send()
+                .await
+                .with_context(|| format!("failed to download adapter `{name}`"))?;
+
+            let status = resp.status();
+            if status.is_success() {
+                content = Some(resp.text().await?);
+                break;
             }
-            bail!("hub returned HTTP {} for `{name}`", resp.status());
+            last_status = Some(status);
+            if status.as_u16() != 404 {
+                bail!("hub returned HTTP {status} for `{name}`");
+            }
         }
 
-        let content = resp.text().await?;
+        let content = match content {
+            Some(c) => c,
+            None => {
+                if last_status.map(|s| s.as_u16()) == Some(404) {
+                    bail!("adapter `{name}` not found in hub");
+                }
+                bail!(
+                    "hub returned HTTP {} for `{name}`",
+                    last_status.map(|s| s.to_string()).unwrap_or_else(|| "unknown".into())
+                );
+            }
+        };
 
         // Validate YAML before saving.
-        serde_yaml_ng::from_str::<crate::adapter::Adapter>(&content)
+        let adapter: crate::adapter::Adapter = serde_yaml_ng::from_str(&content)
             .with_context(|| format!("adapter `{name}` has invalid YAML"))?;
 
-        // Ensure directory exists.
         std::fs::create_dir_all(adapters_dir)
             .with_context(|| format!("failed to create {}", adapters_dir.display()))?;
 
-        let dest = adapters_dir.join(format!("{name}.yaml"));
+        let dest = adapters_dir.join(format!("{}.yaml", adapter.name));
         std::fs::write(&dest, &content)
             .with_context(|| format!("failed to write {}", dest.display()))?;
 

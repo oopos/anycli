@@ -1,0 +1,41 @@
+name: ip
+description: "ip-api — IP geolocation (HTTP, non-commercial)"
+base_url: "http://ip-api.com"
+version: "1.0.0"
+aliases: ["ipapi"]
+tags: ["geo", "network"]
+
+commands:
+  lookup:
+    description: "Look up an IP address"
+    aliases: ["get", "search"]
+    url: "/json/{ip}"
+    format: json
+    selector: "$"
+    fields:
+      ip:
+        json_path: "query"
+      country:
+        json_path: "country"
+      region:
+        json_path: "regionName"
+      city:
+        json_path: "city"
+      isp:
+        json_path: "isp"
+      org:
+        json_path: "org"
+        default: ""
+      as:
+        json_path: "as"
+        default: ""
+      lat:
+        json_path: "lat"
+      lon:
+        json_path: "lon"
+    params:
+      ip:
+        type: string
+        required: true
+        positional: true
+        description: "IPv4/IPv6 address (e.g. 1.1.1.1)"

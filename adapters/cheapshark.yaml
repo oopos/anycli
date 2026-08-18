@@ -1,0 +1,39 @@
+name: cheapshark
+description: "CheapShark — PC game deals"
+base_url: "https://www.cheapshark.com/api/1.0"
+version: "1.0.0"
+aliases: ["deals"]
+tags: ["games"]
+
+commands:
+  deals:
+    description: "Current Steam store deals"
+    aliases: ["search"]
+    url: "/deals?storeID=1&pageSize={limit}&upperPrice={max_price}"
+    format: json
+    headers:
+      User-Agent: "anycli/0.2.5 (https://github.com/oopos/anycli)"
+    fields:
+      title:
+        json_path: "title"
+      sale:
+        json_path: "salePrice"
+      normal:
+        json_path: "normalPrice"
+      savings:
+        json_path: "savings"
+      rating:
+        json_path: "steamRatingText"
+        default: ""
+      steam:
+        json_path: "steamAppID"
+        default: ""
+    params:
+      max_price:
+        type: string
+        default: "20"
+        description: "Max sale price in USD"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of deals"

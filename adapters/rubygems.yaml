@@ -1,0 +1,31 @@
+name: rubygems
+description: "RubyGems — search Ruby packages"
+base_url: "https://rubygems.org/api/v1"
+version: "1.0.0"
+aliases: ["gems"]
+tags: ["packages", "ruby"]
+
+commands:
+  search:
+    description: "Search gems"
+    url: "/search.json?query={query}"
+    format: json
+    fields:
+      name:
+        json_path: "name"
+      version:
+        json_path: "version"
+      downloads:
+        json_path: "downloads"
+      info:
+        json_path: "info"
+        default: ""
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

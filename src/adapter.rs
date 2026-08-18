@@ -4,6 +4,7 @@ use std::collections::HashMap;
 
 use indexmap::IndexMap;
 use serde::Deserialize;
+use serde_json::Value;
 
 /// A declarative adapter that defines how to extract structured data from a website.
 #[derive(Debug, Clone, Deserialize)]
@@ -17,8 +18,29 @@ pub struct Adapter {
     /// Adapter version.
     #[serde(default)]
     pub version: String,
+    /// Alternate names that resolve to this adapter (e.g., `hf` → huggingface).
+    #[serde(default)]
+    pub aliases: Vec<String>,
+    /// Search tags used by the hub index and `anycli list`.
+    #[serde(default)]
+    pub tags: Vec<String>,
     /// Available commands (e.g., "top", "search", "item").
     pub commands: HashMap<String, Command>,
+}
+
+impl Adapter {
+    /// Find a command by canonical name or alias.
+    pub fn command(&self, name: &str) -> Option<(&str, &Command)> {
+        if let Some((key, cmd)) = self.commands.get_key_value(name) {
+            return Some((key.as_str(), cmd));
+        }
+        self.commands.iter().find_map(|(key, cmd)| {
+            cmd.aliases
+                .iter()
+                .any(|alias| alias == name)
+                .then_some((key.as_str(), cmd))
+        })
+    }
 }
 
 /// A single command within an adapter.
@@ -26,7 +48,12 @@ pub struct Adapter {
 pub struct Command {
     /// Human-readable description.
     pub description: String,
+    /// Alternate command names (e.g. `rates` → `rate`).
+    #[serde(default)]
+    pub aliases: Vec<String>,
     /// URL path, may contain `{param}` placeholders. Relative to `base_url`.
+    /// Optional for `static` / `desktop` commands that do not fetch a URL.
+    #[serde(default)]
     pub url: String,
     /// Source format of the response.
     #[serde(default)]
@@ -38,15 +65,37 @@ pub struct Command {
     pub selector: Option<String>,
     /// Fields to extract from each matched item.
     /// Keys are column names, values define extraction rules.
-    pub fields: IndexMap<String, FieldDef>,
-    /// Parameter definitions for this command.
     #[serde(default)]
-    pub params: HashMap<String, ParamDef>,
+    pub fields: IndexMap<String, FieldDef>,
+    /// Inline dataset for `format: static` commands.
+    #[serde(default)]
+    pub data: Option<Value>,
+    /// Column order for `format: static` when `fields` is omitted.
+    #[serde(default)]
+    pub columns: Vec<String>,
+    /// Parameter definitions for this command (order preserved for positional args).
+    #[serde(default)]
+    pub params: IndexMap<String, ParamDef>,
     /// Extra HTTP headers to send with the request.
     #[serde(default)]
     pub headers: HashMap<String, String>,
+    /// HTTP method (GET, POST, PUT, DELETE). Defaults to GET.
+    /// When `body` is set and method is omitted, POST is used.
+    #[serde(default)]
+    pub method: Option<String>,
+    /// JSON request body. `{param}` placeholders are substituted from CLI params.
+    /// Brace-heavy strings (e.g. GraphQL) only replace known param names.
+    #[serde(default)]
+    pub body: Option<Value>,
+    /// Override Content-Type for the request body.
+    #[serde(default)]
+    pub content_type: Option<String>,
+    /// Per-command request timeout in seconds.
+    #[serde(default)]
+    pub timeout: Option<u64>,
     /// JavaScript to evaluate in browser context (for `browser_api`/`desktop` format).
     /// The JS should return a JSON string (use JSON.stringify).
+    /// `{param}` / `${{param}}` placeholders are substituted from CLI params.
     #[serde(default)]
     pub evaluate: Option<String>,
 
@@ -65,6 +114,9 @@ pub struct Command {
     /// via `fetch_each.url` (with `{id}` placeholder) to build the final items.
     #[serde(default)]
     pub fetch_each: Option<FetchEach>,
+    /// Drop this many leading items after extraction (e.g. CDX header row).
+    #[serde(default)]
+    pub skip: usize,
 }
 
 /// Fetch-each definition: the initial response is an ID list, and each
@@ -98,6 +150,8 @@ pub enum SourceFormat {
     Desktop,
     /// Intercept mode: open page in browser, capture network response matching a pattern.
     Intercept,
+    /// Static mode: return inline `data` from the adapter YAML (no network).
+    Static,
 }
 
 /// Defines how to extract a single field from a matched item block.
@@ -107,13 +161,20 @@ pub struct FieldDef {
     #[serde(default)]
     pub pattern: Option<String>,
     /// Dot-separated path for JSON extraction (e.g., "data.title").
-    /// Supports `[]` for array iteration.
+    /// Supports `[]` no-ops, `[n]` indices, and `field[n].nested` (e.g. `weatherDesc[0].value`).
+    /// `@index` is the current row index. Selector `$` means the whole document is one item.
     #[serde(default)]
     pub json_path: Option<String>,
+    /// Fallback JSON paths tried in order when `json_path` is missing.
+    #[serde(default)]
+    pub alt_paths: Vec<String>,
+    /// Build this field from a template using `{field}`, `{json_key}`, or `{param}`.
+    #[serde(default)]
+    pub template: Option<String>,
     /// Default value if extraction fails.
     #[serde(default)]
     pub default: Option<String>,
-    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number".
+    /// Post-processing transform: "strip_html", "trim", "decode_entities", "to_number", "add_one", "join", "first".
     #[serde(default)]
     pub transform: Option<Transform>,
 }
@@ -126,6 +187,11 @@ pub enum Transform {
     Trim,
     DecodeEntities,
     ToNumber,
+    AddOne,
+    /// Join a JSON array into a comma-separated string.
+    Join,
+    /// Take the first non-empty value from a JSON array.
+    First,
 }
 
 /// CLI parameter definition.
@@ -143,6 +209,12 @@ pub struct ParamDef {
     /// Human-readable description.
     #[serde(default)]
     pub description: Option<String>,
+    /// Bind leftover positional CLI args to this parameter (in definition order).
+    #[serde(default)]
+    pub positional: bool,
+    /// Allowed values; rejected if the provided value is not in the list.
+    #[serde(default)]
+    pub choices: Vec<String>,
 }
 
 fn default_string() -> String {

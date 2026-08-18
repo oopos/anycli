@@ -1,0 +1,42 @@
+name: crossref
+description: "Crossref — search scholarly works by DOI metadata"
+base_url: "https://api.crossref.org"
+version: "1.0.0"
+tags: ["academic", "papers"]
+
+commands:
+  search:
+    description: "Search Crossref works"
+    url: "/works?query={query}&rows={limit}"
+    format: json
+    selector: "message.items"
+    fields:
+      title:
+        json_path: "title[0]"
+      doi:
+        json_path: "DOI"
+      year:
+        json_path: "published.date-parts[0][0]"
+        alt_paths: ["issued.date-parts[0][0]"]
+        default: ""
+      publisher:
+        json_path: "publisher"
+        default: ""
+      type:
+        json_path: "type"
+        default: ""
+      url:
+        json_path: "URL"
+      authors:
+        json_path: "author[].family"
+        transform: join
+    params:
+      query:
+        type: string
+        required: true
+        positional: true
+        description: "Search query"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

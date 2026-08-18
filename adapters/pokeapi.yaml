@@ -1,0 +1,32 @@
+name: pokeapi
+description: "PokéAPI — Pokémon species data"
+base_url: "https://pokeapi.co/api/v2"
+version: "1.0.0"
+aliases: ["pokemon"]
+tags: ["games", "reference"]
+
+commands:
+  get:
+    description: "Look up a Pokémon by name or ID"
+    aliases: ["pokemon", "search"]
+    url: "/pokemon/{name}"
+    format: json
+    selector: "$"
+    fields:
+      id:
+        json_path: "id"
+      name:
+        json_path: "name"
+      height:
+        json_path: "height"
+      weight:
+        json_path: "weight"
+      types:
+        json_path: "types[].type.name"
+        transform: join
+    params:
+      name:
+        type: string
+        required: true
+        positional: true
+        description: "Pokémon name or ID (e.g. pikachu, 25)"

@@ -1,0 +1,31 @@
+name: nuget
+description: "NuGet — search .NET packages"
+base_url: "https://azuresearch-usnc.nuget.org"
+version: "1.0.0"
+tags: ["packages", "dotnet"]
+
+commands:
+  search:
+    description: "Search NuGet packages"
+    url: "/query?q={query}&take={limit}"
+    format: json
+    selector: "data"
+    fields:
+      id:
+        json_path: "id"
+      version:
+        json_path: "version"
+      description:
+        json_path: "description"
+        default: ""
+      downloads:
+        json_path: "totalDownloads"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Search keyword"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

@@ -1,0 +1,73 @@
+name: juejin
+description: "稀土掘金 — 推荐与热门技术文章"
+base_url: "https://api.juejin.cn"
+version: "1.0.0"
+aliases: ["jj"]
+tags: ["tech", "chinese", "articles"]
+
+commands:
+  hot:
+    description: "热门推荐文章"
+    url: "/recommend_api/v1/article/recommend_all_feed"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      id_type: 2
+      client_type: 2608
+      sort_type: 200
+      cursor: "0"
+      limit: "{limit}"
+    selector: "data"
+    fields:
+      id:
+        json_path: "item_info.article_id"
+      title:
+        json_path: "item_info.article_info.title"
+      author:
+        json_path: "item_info.author_user_info.user_name"
+      likes:
+        json_path: "item_info.article_info.digg_count"
+      views:
+        json_path: "item_info.article_info.view_count"
+      url:
+        template: "https://juejin.cn/post/{id}"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of articles"
+
+  newest:
+    description: "最新推荐文章"
+    url: "/recommend_api/v1/article/recommend_all_feed"
+    method: POST
+    format: json
+    headers:
+      Content-Type: "application/json"
+    body:
+      id_type: 2
+      client_type: 2608
+      sort_type: 300
+      cursor: "0"
+      limit: "{limit}"
+    selector: "data"
+    fields:
+      id:
+        json_path: "item_info.article_id"
+      title:
+        json_path: "item_info.article_info.title"
+      author:
+        json_path: "item_info.author_user_info.user_name"
+      likes:
+        json_path: "item_info.article_info.digg_count"
+      views:
+        json_path: "item_info.article_info.view_count"
+      url:
+        template: "https://juejin.cn/post/{id}"
+    params:
+      limit:
+        type: integer
+        default: 10
+        description: "Number of articles"

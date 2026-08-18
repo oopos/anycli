@@ -22,6 +22,7 @@ commands:
         json_path: "link"
       tags:
         json_path: "tags"
+        transform: join
     params:
       limit:
         type: integer
@@ -46,6 +47,7 @@ commands:
         json_path: "link"
       tags:
         json_path: "tags"
+        transform: join
     params:
       query:
         type: string
@@ -72,6 +74,7 @@ commands:
         json_path: "link"
       tags:
         json_path: "tags"
+        transform: join
     params:
       limit:
         type: integer
@@ -96,6 +99,7 @@ commands:
         json_path: "link"
       tags:
         json_path: "tags"
+        transform: join
     params:
       limit:
         type: integer
