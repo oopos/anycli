@@ -8,6 +8,7 @@ commands:
     description: "Get Google search suggestions"
     url: "https://suggestqueries.google.com/complete/search?client=firefox&q={query}"
     format: json
+    selector: "$"
     fields:
       suggestions:
         json_path: "[1]"

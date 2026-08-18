@@ -145,6 +145,17 @@
       ]
     },
     {
+      "name": "countries",
+      "description": "World Bank — country metadata by ISO code",
+      "version": "1.0.0",
+      "tags": [
+        "geography"
+      ],
+      "aliases": [
+        "country"
+      ]
+    },
+    {
       "name": "coupang",
       "description": "Coupang — 쿠팡 상품 검색 (requires login)",
       "version": "1.0.0",
@@ -239,6 +250,18 @@
       "description": "eBay — Search products, view item details, and browse listings",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "endoflife",
+      "description": "endoflife.date — product support / EOL schedules",
+      "version": "1.0.0",
+      "tags": [
+        "software",
+        "releases"
+      ],
+      "aliases": [
+        "eol"
+      ]
     },
     {
       "name": "exchange",
@@ -479,10 +502,28 @@
       "tags": []
     },
     {
+      "name": "nuget",
+      "description": "NuGet — search .NET packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "dotnet"
+      ]
+    },
+    {
       "name": "ones",
       "description": "ONES 项目管理 — 我的工作项和工作项详情（需要登录）",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "openalex",
+      "description": "OpenAlex — search scholarly works",
+      "version": "1.0.0",
+      "tags": [
+        "academic",
+        "papers"
+      ]
     },
     {
       "name": "oschina",
@@ -541,6 +582,27 @@
       "description": "Reuters — news search via internal API (requires login cookie)",
       "version": "1.0.0",
       "tags": []
+    },
+    {
+      "name": "rfc",
+      "description": "IETF RFC — look up a numbered RFC",
+      "version": "1.0.0",
+      "tags": [
+        "docs",
+        "ietf"
+      ]
+    },
+    {
+      "name": "rubygems",
+      "description": "RubyGems — search Ruby packages",
+      "version": "1.0.0",
+      "tags": [
+        "packages",
+        "ruby"
+      ],
+      "aliases": [
+        "gems"
+      ]
     },
     {
       "name": "shopee",
@@ -633,6 +695,15 @@
       "tags": []
     },
     {
+      "name": "tvmaze",
+      "description": "TVmaze — search TV shows",
+      "version": "1.0.0",
+      "tags": [
+        "tv",
+        "entertainment"
+      ]
+    },
+    {
       "name": "twitter",
       "description": "Twitter/X — timeline, trending, search, profiles (needs login)",
       "version": "1.0.0",
@@ -689,7 +760,7 @@
     {
       "name": "wikipedia",
       "description": "Wikipedia — article summaries and search",
-      "version": "1.0.0",
+      "version": "1.1.0",
       "tags": []
     },
     {

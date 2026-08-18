@@ -73,6 +73,10 @@ anycli hackernews --help
 anycli hackernews top --help
 anycli doctor
 anycli -v wikipedia search rust
+anycli wikipedia search 量子 lang=zh
+anycli cat hackernews
+anycli eject weather
+anycli coingecko top --sort price --reverse --fields name,price
 ```
 
 ### Community hub
@@ -89,6 +93,8 @@ anycli uninstall zhihu
 ```bash
 anycli new mysite --url https://api.example.com
 anycli validate ~/.anycli/adapters/mysite.yaml
+anycli cat hackernews
+anycli eject weather   # copy built-in YAML into ~/.anycli/adapters/
 ```
 
 ### Shell completions
@@ -103,7 +109,7 @@ anycli completions fish
 
 100+ adapters covering news, video, academic search, shopping, finance, and desktop apps. Run `anycli list` for the current set.
 
-Public JSON APIs (no browser): `hackernews`, `github`, `arxiv`, `wikipedia`, `pubmed`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, …
+Public JSON APIs (no browser): `hackernews`, `github`, `arxiv`, `wikipedia`, `pubmed`, `openalex`, `juejin`, `coingecko`, `mdn`, `dockerhub`, `npm`, `pypi`, `crates`, `rubygems`, `nuget`, `tvmaze`, `rfc`, `endoflife`, `countries`, …
 
 HTML / browser adapters: `github-trending`, `xiaohongshu`, `youtube`, `douyin`, …
 

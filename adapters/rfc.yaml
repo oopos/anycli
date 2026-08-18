@@ -1,0 +1,30 @@
+name: rfc
+description: "IETF RFC — look up a numbered RFC"
+base_url: "https://www.rfc-editor.org/rfc"
+version: "1.0.0"
+tags: ["docs", "ietf"]
+
+commands:
+  get:
+    description: "Fetch RFC metadata by number"
+    url: "/rfc{number}.json"
+    format: json
+    fields:
+      id:
+        json_path: "doc_id"
+      title:
+        json_path: "title"
+      status:
+        json_path: "pub_status"
+        default: ""
+      pages:
+        json_path: "page_count"
+        default: ""
+      draft:
+        json_path: "draft"
+        default: ""
+    params:
+      number:
+        type: string
+        required: true
+        description: "RFC number (e.g. 9110)"

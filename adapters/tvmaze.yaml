@@ -1,0 +1,33 @@
+name: tvmaze
+description: "TVmaze — search TV shows"
+base_url: "https://api.tvmaze.com"
+version: "1.0.0"
+tags: ["tv", "entertainment"]
+
+commands:
+  search:
+    description: "Search TV shows"
+    url: "/search/shows?q={query}"
+    format: json
+    fields:
+      name:
+        json_path: "show.name"
+      status:
+        json_path: "show.status"
+      premiered:
+        json_path: "show.premiered"
+        default: ""
+      rating:
+        json_path: "show.rating.average"
+        default: ""
+      url:
+        json_path: "show.url"
+    params:
+      query:
+        type: string
+        required: true
+        description: "Show name"
+      limit:
+        type: integer
+        default: 10
+        description: "Number of results"

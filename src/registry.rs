@@ -131,12 +131,21 @@ const BUILTIN_ADAPTERS: &[(&str, &str)] = &[
     ("coingecko", include_str!("../adapters/coingecko.yaml")),
     ("mdn", include_str!("../adapters/mdn.yaml")),
     ("dockerhub", include_str!("../adapters/dockerhub.yaml")),
+    ("openalex", include_str!("../adapters/openalex.yaml")),
+    ("rubygems", include_str!("../adapters/rubygems.yaml")),
+    ("nuget", include_str!("../adapters/nuget.yaml")),
+    ("tvmaze", include_str!("../adapters/tvmaze.yaml")),
+    ("endoflife", include_str!("../adapters/endoflife.yaml")),
+    ("rfc", include_str!("../adapters/rfc.yaml")),
+    ("countries", include_str!("../adapters/countries.yaml")),
 ];
 
 /// Adapter registry holding all available adapters.
 #[derive(Debug)]
 pub struct Registry {
     adapters: HashMap<String, Adapter>,
+    /// Canonical adapter name → original YAML source.
+    sources: HashMap<String, String>,
 }
 
 impl Registry {
@@ -146,29 +155,31 @@ impl Registry {
     /// with the same name.
     pub fn load() -> Result<Self> {
         let mut adapters = HashMap::new();
+        let mut sources = HashMap::new();
 
         // Load built-in adapters.
         for (name, yaml) in BUILTIN_ADAPTERS {
             let adapter = serde_yaml_ng::from_str::<Adapter>(yaml)
                 .with_context(|| format!("failed to parse built-in adapter `{name}`"))?;
+            sources.insert(adapter.name.clone(), yaml.to_string());
             adapters.insert(name.to_string(), adapter);
         }
 
         // Load user adapters (override built-in).
         if let Some(user_dir) = user_adapter_dir() {
             if user_dir.is_dir() {
-                load_dir(&user_dir, &mut adapters)?;
+                load_dir(&user_dir, &mut adapters, &mut sources)?;
             }
         }
 
-        Ok(Self { adapters })
+        Ok(Self { adapters, sources })
     }
 
     /// Load adapters from a specific directory (in addition to built-in).
     pub fn load_with_dir(extra_dir: &Path) -> Result<Self> {
         let mut registry = Self::load()?;
         if extra_dir.is_dir() {
-            load_dir(extra_dir, &mut registry.adapters)?;
+            load_dir(extra_dir, &mut registry.adapters, &mut registry.sources)?;
         }
         Ok(registry)
     }
@@ -210,6 +221,16 @@ impl Registry {
             .collect()
     }
 
+    /// Original YAML for an adapter (user override, else built-in).
+    pub fn source_yaml(&self, name: &str) -> Result<&str> {
+        let adapter = self.find(name)?;
+        self.sources
+            .get(&adapter.name)
+            .or_else(|| self.sources.get(name))
+            .map(String::as_str)
+            .ok_or_else(|| anyhow::anyhow!("no YAML source for adapter `{}`", adapter.name))
+    }
+
     /// Number of loaded adapters.
     pub fn len(&self) -> usize {
         self.adapters.len()
@@ -222,7 +243,11 @@ impl Registry {
 }
 
 /// Load all `.yaml` / `.yml` files from a directory into the adapter map.
-fn load_dir(dir: &Path, adapters: &mut HashMap<String, Adapter>) -> Result<()> {
+fn load_dir(
+    dir: &Path,
+    adapters: &mut HashMap<String, Adapter>,
+    sources: &mut HashMap<String, String>,
+) -> Result<()> {
     let entries = std::fs::read_dir(dir)
         .with_context(|| format!("failed to read adapter dir: {}", dir.display()))?;
 
@@ -240,6 +265,7 @@ fn load_dir(dir: &Path, adapters: &mut HashMap<String, Adapter>) -> Result<()> {
         match serde_yaml_ng::from_str::<Adapter>(&content) {
             Ok(adapter) => {
                 debug!(name = adapter.name, path = %path.display(), "loaded user adapter");
+                sources.insert(adapter.name.clone(), content);
                 adapters.insert(adapter.name.clone(), adapter);
             }
             Err(e) => {
@@ -275,6 +301,8 @@ mod tests {
         let names: Vec<&str> = registry.list().iter().map(|a| a.name.as_str()).collect();
         let hf_count = names.iter().filter(|n| **n == "huggingface").count();
         assert_eq!(hf_count, 1);
+        assert!(registry.source_yaml("hackernews").unwrap().contains("name: hackernews"));
+        assert!(registry.source_yaml("hf").unwrap().contains("name: huggingface"));
     }
 
     #[test]

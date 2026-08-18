@@ -22,6 +22,8 @@ const META_COMMANDS: &[&str] = &[
     "completions",
     "new",
     "doctor",
+    "cat",
+    "eject",
     "help",
 ];
 
@@ -55,6 +57,12 @@ enum Commands {
         /// Disable ANSI colors in table output.
         #[arg(long)]
         no_color: bool,
+        /// Sort rows by this field (numeric when possible).
+        #[arg(long)]
+        sort: Option<String>,
+        /// Reverse sort order (use with --sort).
+        #[arg(long)]
+        reverse: bool,
     },
     /// List all available adapters.
     List {
@@ -110,6 +118,19 @@ enum Commands {
     },
     /// Check installation: adapters, user dir, browser backends.
     Doctor,
+    /// Print the YAML source of an adapter.
+    Cat {
+        /// Adapter name.
+        adapter: String,
+    },
+    /// Copy a built-in adapter into ~/.anycli/adapters/ for editing.
+    Eject {
+        /// Adapter name.
+        adapter: String,
+        /// Overwrite an existing file.
+        #[arg(long)]
+        force: bool,
+    },
 }
 
 #[tokio::main]
@@ -206,6 +227,8 @@ async fn run() -> Result<()> {
             format,
             fields,
             no_color,
+            sort,
+            reverse,
         } => {
             let adapter = registry.find(&name)?;
             let (flags, raw_params) = strip_output_flags(&params);
@@ -243,6 +266,11 @@ async fn run() -> Result<()> {
                 .collect();
 
             let mut result = Pipeline::execute(adapter, &command, &param_refs).await?;
+
+            let sort_field = flags.sort.as_ref().or(sort.as_ref());
+            if let Some(field) = sort_field {
+                result.sort_by(field, reverse || flags.reverse);
+            }
 
             let fields = flags.fields.as_ref().or(fields.as_ref());
             if let Some(fields) = fields {
@@ -380,6 +408,31 @@ async fn run() -> Result<()> {
         Commands::Doctor => {
             run_doctor(&registry)?;
         }
+
+        Commands::Cat { adapter: name } => {
+            let yaml = registry.source_yaml(&name)?;
+            print!("{yaml}");
+            if !yaml.ends_with('\n') {
+                println!();
+            }
+        }
+
+        Commands::Eject { adapter: name, force } => {
+            let adapter = registry.find(&name)?;
+            let yaml = registry.source_yaml(&name)?;
+            let dir = anycli::hub::default_adapters_dir()
+                .ok_or_else(|| anyhow::anyhow!("cannot determine home directory"))?;
+            std::fs::create_dir_all(&dir)
+                .with_context(|| format!("failed to create {}", dir.display()))?;
+            let dest = dir.join(format!("{}.yaml", adapter.name));
+            if dest.exists() && !force {
+                bail!("{} already exists (pass --force to overwrite)", dest.display());
+            }
+            std::fs::write(&dest, yaml)
+                .with_context(|| format!("failed to write {}", dest.display()))?;
+            println!("Wrote {}", dest.display());
+            println!("User adapters override built-ins. Edit, then: anycli validate {}", dest.display());
+        }
     }
 
     Ok(())
@@ -390,6 +443,8 @@ struct OutputFlags {
     format: Option<String>,
     fields: Option<String>,
     no_color: bool,
+    sort: Option<String>,
+    reverse: bool,
 }
 
 /// Pull output-related flags out of trailing adapter params.
@@ -406,6 +461,23 @@ fn strip_output_flags(params: &[String]) -> (OutputFlags, Vec<String>) {
         }
         if p == "--verbose" || p == "-v" {
             set_verbose(true);
+            i += 1;
+            continue;
+        }
+        if p == "--reverse" {
+            flags.reverse = true;
+            i += 1;
+            continue;
+        }
+        if p == "--sort" {
+            if let Some(val) = params.get(i + 1) {
+                flags.sort = Some(val.clone());
+                i += 2;
+                continue;
+            }
+        }
+        if let Some(val) = p.strip_prefix("--sort=") {
+            flags.sort = Some(val.to_string());
             i += 1;
             continue;
         }
@@ -683,6 +755,8 @@ fn print_adapter_help(adapter: &anycli::Adapter, sub_command: Option<&str>) {
         "  -f, --format <fmt>         Output format: json, table, csv, markdown, yaml, plain [default: table]"
     );
     println!("      --fields <cols>        Comma-separated columns to include");
+    println!("      --sort <field>         Sort rows by field");
+    println!("      --reverse              Reverse sort order");
     println!("      --no-color             Disable ANSI colors");
     println!("  -h, --help                 Display help for command");
     println!(

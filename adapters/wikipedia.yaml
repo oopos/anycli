@@ -1,12 +1,12 @@
 name: wikipedia
 description: "Wikipedia — article summaries and search"
 base_url: "https://en.wikipedia.org/api/rest_v1"
-version: "1.0.0"
+version: "1.1.0"
 
 commands:
   summary:
     description: "Get a summary of a Wikipedia article"
-    url: "/page/summary/{title}"
+    url: "https://{lang}.wikipedia.org/api/rest_v1/page/summary/{title}"
     format: json
     fields:
       title:
@@ -24,10 +24,14 @@ commands:
         type: string
         required: true
         description: "Article title (use underscores for spaces)"
+      lang:
+        type: string
+        default: en
+        description: "Wikipedia language code (en, zh, ja, ...)"
 
   search:
     description: "Search Wikipedia articles"
-    url: "https://en.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&format=json&srlimit={limit}"
+    url: "https://{lang}.wikipedia.org/w/api.php?action=query&list=search&srsearch={query}&format=json&srlimit={limit}"
     format: json
     selector: "query.search"
     fields:
@@ -45,6 +49,10 @@ commands:
         type: string
         required: true
         description: "Search query"
+      lang:
+        type: string
+        default: en
+        description: "Wikipedia language code (en, zh, ja, ...)"
       limit:
         type: integer
         default: 10
@@ -52,7 +60,7 @@ commands:
 
   random:
     description: "Random Wikipedia article summary"
-    url: "/page/random/summary"
+    url: "https://{lang}.wikipedia.org/api/rest_v1/page/random/summary"
     format: json
     fields:
       title:
@@ -65,3 +73,8 @@ commands:
         json_path: "thumbnail.source"
       url:
         json_path: "content_urls.desktop.page"
+    params:
+      lang:
+        type: string
+        default: en
+        description: "Wikipedia language code (en, zh, ja, ...)"

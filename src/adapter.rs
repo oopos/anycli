@@ -140,7 +140,8 @@ pub struct FieldDef {
     #[serde(default)]
     pub pattern: Option<String>,
     /// Dot-separated path for JSON extraction (e.g., "data.title").
-    /// Supports `[]` segments (no-op / current item) and `@index` for the row index.
+    /// Supports `[]` no-ops, `[n]` indices, and `field[n].nested` (e.g. `weatherDesc[0].value`).
+    /// `@index` is the current row index. Selector `$` means the whole document is one item.
     #[serde(default)]
     pub json_path: Option<String>,
     /// Fallback JSON paths tried in order when `json_path` is missing.

@@ -62,6 +62,57 @@ impl PipelineResult {
             }
         }
     }
+
+    /// Sort items by a field. Numeric strings compare as numbers.
+    pub fn sort_by(&mut self, field: &str, reverse: bool) {
+        self.items.sort_by(|a, b| {
+            let va = a.get(field).map(sort_key).unwrap_or_default();
+            let vb = b.get(field).map(sort_key).unwrap_or_default();
+            let ord = match (&va, &vb) {
+                (SortKey::Num(x), SortKey::Num(y)) => x.partial_cmp(y).unwrap_or(std::cmp::Ordering::Equal),
+                _ => va.as_str().cmp(vb.as_str()),
+            };
+            if reverse { ord.reverse() } else { ord }
+        });
+        self.count = self.items.len();
+    }
+}
+
+#[derive(Clone)]
+enum SortKey {
+    Num(f64),
+    Str(String),
+}
+
+impl SortKey {
+    fn as_str(&self) -> &str {
+        match self {
+            SortKey::Str(s) => s,
+            SortKey::Num(_) => "",
+        }
+    }
+}
+
+impl Default for SortKey {
+    fn default() -> Self {
+        SortKey::Str(String::new())
+    }
+}
+
+fn sort_key(v: &Value) -> SortKey {
+    match v {
+        Value::Number(n) => n.as_f64().map(SortKey::Num).unwrap_or_else(|| SortKey::Str(n.to_string())),
+        Value::String(s) => {
+            if let Ok(n) = s.parse::<f64>() {
+                SortKey::Num(n)
+            } else {
+                SortKey::Str(s.clone())
+            }
+        }
+        Value::Bool(b) => SortKey::Str(b.to_string()),
+        Value::Null => SortKey::Str(String::new()),
+        other => SortKey::Str(other.to_string()),
+    }
 }
 
 /// The pipeline engine.
@@ -723,10 +774,14 @@ fn extract_json_value(
     params: &HashMap<String, String>,
 ) -> Result<Vec<Value>> {
     let array = if let Some(ref selector) = cmd.selector {
-        match navigate_json(root, selector) {
-            Some(Value::Array(arr)) => arr.clone(),
-            Some(other) => vec![other.clone()],
-            None => Vec::new(),
+        if selector == "$" || selector == "." {
+            vec![root.clone()]
+        } else {
+            match navigate_json(root, selector) {
+                Some(Value::Array(arr)) => arr.clone(),
+                Some(other) => vec![other.clone()],
+                None => Vec::new(),
+            }
         }
     } else if let Some(arr) = root.as_array() {
         arr.clone()
@@ -736,7 +791,10 @@ fn extract_json_value(
 
     let mut items = Vec::with_capacity(array.len());
     for (index, element) in array.iter().enumerate() {
-        items.push(extract_object(element, &cmd.fields, params, index)?);
+        let item = extract_object(element, &cmd.fields, params, index)?;
+        if !is_blank_item(&item) {
+            items.push(item);
+        }
     }
 
     Ok(items)
@@ -769,6 +827,17 @@ fn extract_object(
     Ok(Value::Object(obj))
 }
 
+fn is_blank_item(v: &Value) -> bool {
+    match v.as_object() {
+        Some(map) if !map.is_empty() => map.values().all(|x| match x {
+            Value::Null => true,
+            Value::String(s) => s.is_empty(),
+            _ => false,
+        }),
+        _ => false,
+    }
+}
+
 /// Extract a single field from a JSON element.
 fn extract_field_json(element: &Value, def: &FieldDef, index: usize) -> Result<Value> {
     let mut paths: Vec<&str> = Vec::new();
@@ -796,33 +865,70 @@ fn extract_field_json(element: &Value, def: &FieldDef, index: usize) -> Result<V
     })
 }
 
-/// Navigate a JSON value by dot-separated path (e.g., "data.items" or "title").
-/// `[]` segments are no-ops so `[].eid` reads `eid` on the current item.
+/// Navigate a JSON value by a path.
+///
+/// Supports:
+/// - dots: `data.title`
+/// - array indices: `[1]`, `weatherDesc[0].value`, `hourly[4].weatherDesc[0].value`
+/// - `[]` as a no-op so `[].eid` reads `eid` on the current item
 pub(crate) fn navigate_json<'a>(val: &'a Value, path: &str) -> Option<&'a Value> {
-    if path.is_empty() || path == "[]" {
+    if path.is_empty() || path == "[]" || path == "$" || path == "." {
         return Some(val);
     }
     let mut current = val;
-    for segment in path.split('.') {
-        if segment.is_empty() || segment == "[]" {
-            continue;
-        }
-        let key = segment.strip_suffix("[]").unwrap_or(segment);
-        match current {
-            Value::Object(map) => {
-                current = map.get(key)?;
-            }
-            Value::Array(arr) => {
-                if let Ok(idx) = key.parse::<usize>() {
-                    current = arr.get(idx)?;
-                } else {
-                    return None;
+    for token in path_tokens(path)? {
+        current = match token {
+            PathToken::Skip => current,
+            PathToken::Key(key) => match current {
+                Value::Object(map) => map.get(key)?,
+                Value::Array(arr) => {
+                    let idx: usize = key.parse().ok()?;
+                    arr.get(idx)?
                 }
-            }
-            _ => return None,
-        }
+                _ => return None,
+            },
+            PathToken::Index(idx) => current.as_array()?.get(idx)?,
+        };
     }
     Some(current)
+}
+
+#[derive(Debug, Clone, Copy)]
+enum PathToken<'a> {
+    Skip,
+    Key(&'a str),
+    Index(usize),
+}
+
+fn path_tokens(path: &str) -> Option<Vec<PathToken<'_>>> {
+    let bytes = path.as_bytes();
+    let mut tokens = Vec::new();
+    let mut i = 0;
+    while i < bytes.len() {
+        if bytes[i] == b'.' {
+            i += 1;
+            continue;
+        }
+        if bytes[i] == b'[' {
+            let close = path[i + 1..].find(']')?;
+            let inner = &path[i + 1..i + 1 + close];
+            if inner.is_empty() {
+                tokens.push(PathToken::Skip);
+            } else {
+                tokens.push(PathToken::Index(inner.parse().ok()?));
+            }
+            i = i + 2 + close;
+            continue;
+        }
+        let rest = &path[i..];
+        let len = rest.find(['.', '[']).unwrap_or(rest.len());
+        if len == 0 {
+            return None;
+        }
+        tokens.push(PathToken::Key(&path[i..i + len]));
+        i += len;
+    }
+    Some(tokens)
 }
 
 fn render_template(
@@ -1105,6 +1211,22 @@ mod tests {
         let v = json!({"eid": "abc", "title": "hello"});
         assert_eq!(navigate_json(&v, "[].eid").unwrap(), &json!("abc"));
         assert_eq!(navigate_json(&v, "title").unwrap(), &json!("hello"));
+    }
+
+    #[test]
+    fn json_path_bracket_indices() {
+        let desc = json!({"weatherDesc": [{"value": "Sunny"}]});
+        assert_eq!(
+            navigate_json(&desc, "weatherDesc[0].value").unwrap(),
+            &json!("Sunny")
+        );
+        let kline = json!(["t", "1.0", "2.0", "0.5", "1.5"]);
+        assert_eq!(navigate_json(&kline, "[1]").unwrap(), &json!("1.0"));
+        let nested = json!({"hourly": [null, null, null, null, {"weatherDesc": [{"value": "Rain"}]}]});
+        assert_eq!(
+            navigate_json(&nested, "hourly[4].weatherDesc[0].value").unwrap(),
+            &json!("Rain")
+        );
     }
 
     #[test]
